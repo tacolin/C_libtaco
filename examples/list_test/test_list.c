@@ -1,6 +1,5 @@
 #include "basic.h"
 #include "list.h"
-#include "queue.h"
 
 tListBool largerThan(void* content, void* arg)
 {

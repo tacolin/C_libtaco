@@ -14,12 +14,13 @@ static void _unlock(tQueue* queue)
 
 ////////////////////////////////////////////////////////////////////////////////
 
-int queue_init(tQueue *queue, int max_queue_depth,
-                 tQueueContentCleanFn clean_fn,
-                 int is_put_suspend, int is_get_suspend)
+tQueueStatus queue_init(tQueue *queue, char* name, int max_queue_depth,
+                        tQueueContentCleanFn clean_fn,
+                        tQueueSuspend is_put_suspend,
+                        tQueueSuspend is_get_suspend)
 {
-    check_if(queue == NULL, return QUEUE_FAIL, "queue is null");
-    check_if(max_queue_depth <= 0, return QUEUE_FAIL,
+    check_if(queue == NULL, return QUEUE_ERROR, "queue is null");
+    check_if(max_queue_depth <= 0, return QUEUE_ERROR,
              "max_queue_depth is %d", max_queue_depth);
 
     queue->max_obj_num    = max_queue_depth;
@@ -34,7 +35,12 @@ int queue_init(tQueue *queue, int max_queue_depth,
     sem_init(&(queue->empty_sem), 0, max_queue_depth);
 
     int chk = pthread_mutex_init(&(queue->lock), NULL);
-    check_if(chk != 0, return QUEUE_FAIL, "pthread_mutext_init failed");
+    check_if(chk != 0, return QUEUE_ERROR, "pthread_mutext_init failed");
+
+    if (name)
+    {
+        snprintf(queue->name, QUEUE_NAME_SIZE, "%s", name);
+    }
 
     return QUEUE_OK;
 }
@@ -74,12 +80,12 @@ void queue_clean(tQueue *queue)
     return;
 }
 
-int queue_put(tQueue* queue, void* content)
+tQueueStatus queue_put(tQueue* queue, void* content)
 {
-    check_if(queue == NULL, return QUEUE_FAIL, "queue is null");
-    check_if(content == NULL, return QUEUE_FAIL, "content is null");
+    check_if(queue == NULL, return QUEUE_ERROR, "queue is null");
+    check_if(content == NULL, return QUEUE_ERROR, "(%s) content is null", queue->name);
 
-    if (queue->is_put_suspend == QUEUE_PUT_SUSPEND)
+    if (queue->is_put_suspend == QUEUE_SUSPEND)
     {
         sem_wait(&(queue->empty_sem));
     }
@@ -88,7 +94,8 @@ int queue_put(tQueue* queue, void* content)
         if (queue->curr_obj_num >= queue->max_obj_num)
         {
             // queue is full
-            return QUEUE_FAIL;
+            derror("(%s) queue is full (length = %d)", queue->name, queue_length(queue));
+            return QUEUE_ERROR;
         }
     }
 
@@ -111,7 +118,7 @@ int queue_put(tQueue* queue, void* content)
     }
     queue->curr_obj_num++;
 
-    if (queue->is_get_suspend == QUEUE_GET_SUSPEND)
+    if (queue->is_get_suspend == QUEUE_SUSPEND)
     {
         sem_post(&(queue->obj_sem));
     }
@@ -125,7 +132,7 @@ void* queue_get(tQueue* queue)
 {
     check_if(queue == NULL, return NULL, "queue is null");
 
-    if (queue->is_get_suspend == QUEUE_GET_SUSPEND)
+    if (queue->is_get_suspend == QUEUE_SUSPEND)
     {
         sem_wait(&(queue->obj_sem));
     }
@@ -135,18 +142,18 @@ void* queue_get(tQueue* queue)
         {
             // queue is empty
             check_if(queue->head, return NULL,
-                     "queue is empty but pHead exists");
+                     "(%s) queue is empty but pHead exists", queue->name);
             check_if(queue->tail, return NULL,
-                     "queue is empty but pTail exists");
+                     "(%s) queue is empty but pTail exists", queue->name);
 
             return NULL;
         }
     }
 
     check_if(queue->head == NULL, return NULL,
-             "currentObjNum = %d, but pHead is NULL", queue->curr_obj_num);
+             "(%s) currentObjNum = %d, but pHead is NULL", queue->name, queue->curr_obj_num);
     check_if(queue->tail == NULL, return NULL,
-             "currentObjNum = %d, but pTail is NULL", queue->curr_obj_num);
+             "(%s) currentObjNum = %d, but pTail is NULL", queue->name, queue->curr_obj_num);
 
     _lock(queue);
 
@@ -162,7 +169,7 @@ void* queue_get(tQueue* queue)
     }
     queue->curr_obj_num--;
 
-    if (queue->is_put_suspend == QUEUE_PUT_SUSPEND)
+    if (queue->is_put_suspend == QUEUE_SUSPEND)
     {
         sem_post(&(queue->empty_sem));
     }
@@ -175,3 +182,9 @@ void* queue_get(tQueue* queue)
     return content;
 }
 
+int queue_length(tQueue* queue)
+{
+    check_if(queue == NULL, return -1, "queue is null");
+
+    return queue->curr_obj_num;
+}

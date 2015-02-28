@@ -7,16 +7,23 @@
 
 ////////////////////////////////////////////////////////////////////////////////
 
-#define QUEUE_OK   0
-#define QUEUE_FAIL -1
-
-#define QUEUE_PUT_SUSPEND   1
-#define QUEUE_PUT_UNSUSPEND 0
-
-#define QUEUE_GET_SUSPEND   1
-#define QUEUE_GET_UNSUSPEND 0
+#define QUEUE_NAME_SIZE 20
 
 ////////////////////////////////////////////////////////////////////////////////
+
+typedef enum
+{
+    QUEUE_OK = 0,
+    QUEUE_ERROR = -1
+
+} tQueueStatus;
+
+typedef enum
+{
+    QUEUE_SUSPEND = 1,
+    QUEUE_UNSUSPEND = 0
+
+} tQueueSuspend;
 
 typedef struct tQueueObj
 {
@@ -29,6 +36,8 @@ typedef void (*tQueueContentCleanFn)(void* obj_content);
 
 typedef struct tQueue
 {
+    char name[QUEUE_NAME_SIZE+1];
+
     int max_obj_num;
     int curr_obj_num;
 
@@ -49,13 +58,16 @@ typedef struct tQueue
 
 ////////////////////////////////////////////////////////////////////////////////
 
-int queue_init(tQueue *queue, int max_queue_depth,
-               tQueueContentCleanFn clean_func,
-               int is_put_suspend, int is_get_suspend);
+tQueueStatus queue_init(tQueue *queue, char* name, int max_queue_depth,
+                        tQueueContentCleanFn clean_func,
+                        tQueueSuspend is_put_suspend,
+                        tQueueSuspend is_get_suspend);
 
 void queue_clean(tQueue *queue);
 
-int   queue_put(tQueue* queue, void* content);
+tQueueStatus queue_put(tQueue* queue, void* content);
 void* queue_get(tQueue* queue);
+
+int queue_length(tQueue* queue);
 
 #endif //_QUEUE_H_
