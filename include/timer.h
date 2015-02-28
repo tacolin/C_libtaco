@@ -2,6 +2,8 @@
 #define _TIMER_H_
 
 #include "basic.h"
+#include <signal.h>
+#include <time.h>
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -25,19 +27,31 @@ typedef enum
 
 } tTimerState;
 
+typedef enum
+{
+    TIMER_ONCE,
+    TIMER_PERIODIC,
+
+    TIMER_TYPES
+
+} tTimerType;
+
 typedef void (*tTimerExpiredFn)(void* arg);
 
 typedef struct tTimer
 {
     char name[TIMER_NAME_SIZE+1];
-    int  timeout; // ms
+    int  timeout_ms; // ms
     void* arg;
 
     tTimerExpiredFn expired_fn;
 
     int guard_code;
-    int tick;
 
+    timer_t timer_id;
+    struct sigevent ev;
+
+    tTimerType type;
     tTimerState state;
 
 } tTimer;
@@ -45,7 +59,7 @@ typedef struct tTimer
 ////////////////////////////////////////////////////////////////////////////////
 
 tTimerStatus timer_init(tTimer* timer, char* name, int timeout_ms,
-                        tTimerExpiredFn expired_fn, void* arg);
+                        tTimerExpiredFn expired_fn, void* arg, tTimerType type);
 
 tTimerStatus timer_uninit(tTimer* timer);
 tTimerStatus timer_start(tTimer* timer);
@@ -59,8 +73,5 @@ static inline tTimerState timer_state(tTimer* timer)
 
 tTimerStatus timer_system_init(void);
 tTimerStatus timer_system_uninit(void);
-
-void timer_msleep(int ms);
-void timer_sleep(int s);
 
 #endif //_TIMER_H_
