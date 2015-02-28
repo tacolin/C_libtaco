@@ -22,7 +22,7 @@ static void _routine(void* task, void* arg)
 {
     tTaco* taco = (tTaco*)arg;
 
-    dprint("%s count = %d", taco->name, taco->count);
+    dprint("%s  = %d", taco->name, taco->count);
     taco->count++;
 }
 

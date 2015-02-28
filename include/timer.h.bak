@@ -1,0 +1,66 @@
+#ifndef _TIMER_H_
+#define _TIMER_H_
+
+#include "basic.h"
+
+////////////////////////////////////////////////////////////////////////////////
+
+#define TIMER_NAME_SIZE 20
+
+////////////////////////////////////////////////////////////////////////////////
+
+typedef enum
+{
+    TIMER_OK = 0,
+    TIMER_ERROR = -1
+
+} tTimerStatus;
+
+typedef enum
+{
+    TIMER_RUNNING,
+    TIMER_STOPPED,
+
+    TIMER_STATES
+
+} tTimerState;
+
+typedef void (*tTimerExpiredFn)(void* arg);
+
+typedef struct tTimer
+{
+    char name[TIMER_NAME_SIZE+1];
+    int  timeout; // ms
+    void* arg;
+
+    tTimerExpiredFn expired_fn;
+
+    int guard_code;
+    int tick;
+
+    tTimerState state;
+
+} tTimer;
+
+////////////////////////////////////////////////////////////////////////////////
+
+tTimerStatus timer_init(tTimer* timer, char* name, int timeout_ms,
+                        tTimerExpiredFn expired_fn, void* arg);
+
+tTimerStatus timer_uninit(tTimer* timer);
+tTimerStatus timer_start(tTimer* timer);
+tTimerStatus timer_stop(tTimer* timer);
+
+static inline tTimerState timer_state(tTimer* timer)
+{
+    check_if(timer == NULL, return TIMER_STOPPED, "timer is null");
+    return timer->state;
+}
+
+tTimerStatus timer_system_init(void);
+tTimerStatus timer_system_uninit(void);
+
+void timer_msleep(int ms);
+void timer_sleep(int s);
+
+#endif //_TIMER_H_
