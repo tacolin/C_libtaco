@@ -5,12 +5,18 @@
 
 ////////////////////////////////////////////////////////////////////////////////
 
-#define LIST_OK   0
-#define LIST_FAIL -1
+#define LIST_NAME_SIZE 20
 
 ////////////////////////////////////////////////////////////////////////////////
 
-typedef enum 
+typedef enum
+{
+    LIST_OK = 0,
+    LIST_ERROR = -1
+
+} tListStatus;
+
+typedef enum
 {
     LIST_TRUE = 1,
     LIST_FALSE = 0
@@ -35,6 +41,7 @@ typedef struct tList
     tListObj* tail;
 
     int num;
+    char name[LIST_NAME_SIZE+1];
 
     tListContentCleanFn cleanfn;
 
@@ -42,13 +49,16 @@ typedef struct tList
 
 ////////////////////////////////////////////////////////////////////////////////
 
-int  list_init(tList* list, tListContentCleanFn clean_fn);
+tListStatus list_init(tList* list, char* name, tListContentCleanFn clean_fn);
 void list_clean(tList* list);
 
-int  list_insert(tList* list, void* content);
-int  list_append(tList* list, void* content);
+tListStatus list_insert(tList* list, void* content);
+tListStatus list_append(tList* list, void* content);
 
-int  list_remove(tList* list, void* content);
+tListStatus list_insertTo(tList* list, void* target, void* content);
+tListStatus list_appendTo(tList* list, void* target, void* content);
+
+tListStatus list_remove(tList* list, void* content);
 
 void* list_find(tList* list, tListContentFindFn find_fn, void* arg);
 

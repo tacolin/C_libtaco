@@ -29,7 +29,8 @@ target_link_libraries( ${PROJECT_NAME} taco )
 
 install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION "${APP_INSTALL_DIR}")
 
-add_custom_target("run-${PROJECT_NAME}")
+add_custom_target("run-${PROJECT_NAME}"
+                  DEPENDS ${PROJECT_NAME} taco)
 
 add_custom_command(TARGET "run-${PROJECT_NAME}"
                    COMMAND valgrind ./${PROJECT_NAME}
