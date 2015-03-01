@@ -40,20 +40,24 @@ tUdpStatus udp_init(tUdp* udp, char* local_ip, int local_port)
 
     if (udp->local_port != UDP_PORT_ANY)
     {
-        struct sockaddr_in my = {};
-        my.sin_family = AF_INET;
+        struct sockaddr_in me = {};
+        me.sin_family = AF_INET;
         if (local_ip)
         {
-            check = inet_pton(AF_INET, local_ip, &my.sin_addr);
+            check = inet_pton(AF_INET, local_ip, &me.sin_addr);
             check_if(check != 1, goto _ERROR, "inet_pton failed");
         }
         else
         {
-            my.sin_addr.s_addr = htonl(INADDR_ANY);
+            me.sin_addr.s_addr = htonl(INADDR_ANY);
         }
-        my.sin_port = htons(local_port);
+        me.sin_port = htons(local_port);
 
-        check = bind(udp->fd, (struct sockaddr*)&my, sizeof(my));
+        const int on = 1;
+        check = setsockopt(udp->fd, SOL_SOCKET, SO_REUSEADDR, (void*)&on, sizeof(on));
+        check_if(check < 0, goto _ERROR, "setsockopt reuse failed");
+
+        check = bind(udp->fd, (struct sockaddr*)&me, sizeof(me));
         check_if(check < 0, goto _ERROR, "bind failed");
     }
 
