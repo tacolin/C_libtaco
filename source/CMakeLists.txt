@@ -18,5 +18,7 @@ add_library( ${PROJECT_NAME} SHARED ${_src_files} ${_obj_files} )
 set_target_properties( ${PROJECT_NAME} PROPERTIES LINKER_LANGUAGE C )
 
 target_link_libraries( ${PROJECT_NAME} rt )
+target_link_libraries( ${PROJECT_NAME} crypto )
+target_link_libraries( ${PROJECT_NAME} ssl )
 
 install(TARGETS ${PROJECT_NAME} LIBRARY DESTINATION ${LIB_INSTALL_DIR})

@@ -29,17 +29,17 @@ typedef struct tTcpAddr
 
 } tTcpAddr;
 
-typedef struct tTcp 
+typedef struct tTcp
 {
-    int local_port;
     int fd;
+    int local_port;
     int is_init;
 
     tTcpAddr remote;
 
 } tTcp;
 
-typedef struct tTcpServer 
+typedef struct tTcpServer
 {
     int fd;
     int local_port;
