@@ -1,8 +1,10 @@
 #include "basic.h"
 #include "dtls.h"
+#include "list.h"
 
 #include <signal.h>
 #include <string.h>
+#include <sys/select.h>
 
 static int _running = 1;
 static tDtlsServer _server = {};
@@ -12,6 +14,15 @@ static void _sigIntHandler(int sig_num)
     _running = 0;
     _server.accept_run = 0;
     dprint("stop main()");
+}
+
+static void _destroyDtls(void* arg)
+{
+    check_if(arg == NULL, return, "arg is null");
+    tDtls* dtls = (tDtls*)arg;
+    dtls_client_uninit(dtls);
+    free(dtls);
+    return;
 }
 
 int main(int argc, char const *argv[])
@@ -29,33 +40,110 @@ int main(int argc, char const *argv[])
         int  recvlen;
         int  sendlen;
 
+        // while (_running)
+        // {
+        //     tDtls dtls = {};
+        //     dtls_server_accept(&_server, &dtls);
+
+        //     while (_running)
+        //     {
+        //         recvlen = dtls_recv(&dtls, buffer, 256);
+        //         if (recvlen <= 0)
+        //         {
+        //             derror("recvlen = %d", recvlen);
+        //             break;
+        //         }
+
+        //         dprint("rx (%s) from ip(%s) port(%d)", buffer,
+        //             dtls.remote.ipv4, dtls.remote.port);
+
+        //         sendlen = dtls_send(&dtls, buffer, recvlen);
+        //         if (sendlen <= 0)
+        //         {
+        //             derror("send echo back len = %d", sendlen);
+        //             break;
+        //         }
+        //     }
+
+        //     dtls_client_uninit(&dtls);
+        // }
+
+        // dtls_server_uninit(&_server);
+
+
+        struct timeval timeout = {};
+        int sel_ret;
+        fd_set readset;
+        tList dtls_list;
+        tDtls* dtls = NULL;
+
+        list_init(&dtls_list, "DTLS LIST", _destroyDtls);
+
         while (_running)
         {
-            tDtls dtls = {};
-            dtls_server_accept(&_server, &dtls);
+            timeout.tv_sec = 1;
+            timeout.tv_usec = 0;
 
-            while (_running)
+            FD_ZERO(&readset);
+
+            FD_SET(_server.fd, &readset);
+
+            for (dtls = list_head(&dtls_list); dtls; dtls = list_next(&dtls_list, dtls))
             {
-                recvlen = dtls_recv(&dtls, buffer, 256);
-                if (recvlen <= 0)
-                {
-                    derror("recvlen = %d", recvlen);
-                    break;
-                }
-
-                dprint("rx (%s) from ip(%s) port(%d)", buffer,
-                    dtls.remote.ipv4, dtls.remote.port);
-
-                sendlen = dtls_send(&dtls, buffer, recvlen);
-                if (sendlen <= 0)
-                {
-                    derror("send echo back len = %d", sendlen);
-                    break;
-                }
+                FD_SET(dtls->fd, &readset);
             }
 
-            dtls_client_uninit(&dtls);
+            sel_ret = select(FD_SETSIZE, &readset, NULL, NULL, &timeout);
+            if (sel_ret < 0)
+            {
+                derror("select failed");
+                break;
+            }
+            else if (sel_ret == 0)
+            {
+                continue;
+            }
+            else
+            {
+                if (FD_ISSET(_server.fd, &readset))
+                {
+                    dtls = calloc(sizeof(tDtls), 1);
+                    dtls_server_accept(&_server, dtls);
+                    list_append(&dtls_list, dtls);
+                }
+
+                for (dtls = list_head(&dtls_list); dtls; dtls = list_next(&dtls_list, dtls))
+                {
+                    if (FD_ISSET(dtls->fd, &readset))
+                    {
+                        recvlen = dtls_recv(dtls, buffer, 256);
+                        if (recvlen <= 0)
+                        {
+                            derror("recvlen = %d", recvlen);
+                            list_remove(&dtls_list, dtls);
+                            dtls_client_uninit(dtls);
+                            free(dtls);
+                            break;
+                        }
+
+                        dprint("rx (%s) from ip(%s) port(%d)", buffer,
+                            dtls->remote.ipv4, dtls->remote.port);
+
+                        sendlen = dtls_send(dtls, buffer, recvlen);
+                        if (sendlen <= 0)
+                        {
+                            derror("send echo back len = %d", sendlen);
+                            list_remove(&dtls_list, dtls);
+                            dtls_client_uninit(dtls);
+                            free(dtls);
+                            break;
+                        }
+                    }
+                }
+            }
         }
+
+        list_clean(&dtls_list);
 
         dtls_server_uninit(&_server);
     }
