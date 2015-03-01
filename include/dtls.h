@@ -74,7 +74,7 @@ typedef struct tDtls
 ////////////////////////////////////////////////////////////////////////////////
 
 tDtlsStatus dtls_server_init(tDtlsServer* server,
-                             char* local_ip, int local_port, int max_conn_num,
+                             char* local_ip, int local_port,
                              char* cert_path, char* key_path, int timeout_sec);
 tDtlsStatus dtls_server_uninit(tDtlsServer* server);
 tDtlsStatus dtls_server_accept(tDtlsServer* server, tDtls* dtls);

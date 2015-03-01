@@ -399,13 +399,12 @@ tDtlsStatus dtls_toDtlsAddr(struct sockaddr_in sock_addr, tDtlsAddr* dtls_addr)
 ////////////////////////////////////////////////////////////////////////////////
 
 tDtlsStatus dtls_server_init(tDtlsServer* server,
-                             char* local_ip, int local_port, int max_conn_num,
+                             char* local_ip, int local_port,
                              char* cert_path, char* key_path, int timeout_sec)
 {
     check_if(server == NULL, return DTLS_ERROR, "server is null");
     check_if(cert_path == NULL, return DTLS_ERROR, "cert_path is null");
     check_if(key_path == NULL, return DTLS_ERROR, "key_path is null");
-    check_if(max_conn_num <= 0, return DTLS_ERROR, "max_conn_num <= 0");
     check_if(timeout_sec <= 0, return DTLS_ERROR, "timeout_sec <= 0");
 
     memset(server, 0, sizeof(tDtlsServer));

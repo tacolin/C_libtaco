@@ -22,7 +22,7 @@ int main(int argc, char const *argv[])
     {
         int port = atoi(argv[1]);
 
-        dtls_server_init(&_server, NULL, port, 10,
+        dtls_server_init(&_server, NULL, port,
                          "certs/server-cert.pem", "certs/server-key.pem", 10);
 
         char buffer[256];
