@@ -47,22 +47,18 @@ int main(int argc, char const *argv[])
 
     dprint("show 30, 20, 10");
 
-    get = list_head(&list);
-    while (get)
+    for (get = list_head(&list); get; get = list_next(&list, get))
     {
         dprint("get = %ld", *get);
-        get = list_next(&list, get);
     }
 
     list_remove(&list, &b);
 
     dprint("show 30, 10");
 
-    get = list_head(&list);
-    while (get)
+    LIST_FOREACH(&list, get)
     {
         dprint("get = %ld", *get);
-        get = list_next(&list, get);
     }
 
     dprint("show tail = 10");
@@ -83,11 +79,9 @@ int main(int argc, char const *argv[])
     list_appendTo(&list, &a, &b);
     list_insertTo(&list, &a, &b);
 
-    get = list_head(&list);
-    while (get)
+    LIST_FOREACH(&list, get)
     {
         dprint("get = %ld", *get);
-        get = list_next(&list, get);
     }
 
     list_clean(&list);
