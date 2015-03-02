@@ -87,7 +87,7 @@ tDtlsStatus dtls_client_uninit(tDtls* dtls);
 int dtls_recv(tDtls* dtls, void* buffer, int buffer_size);
 int dtls_send(tDtls* dtls, void* data, int data_len);
 
-tDtlsStatus dtls_system_init(void);
-void dtls_system_uninit(void);
+// tDtlsStatus dtls_system_init(void);
+// void dtls_system_uninit(void);
 
 #endif //_DTLS_H_

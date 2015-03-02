@@ -14,7 +14,7 @@
 
 static unsigned char    _cookie_secret[DTLS_COOKIE_SECRET_LEN] = {0};
 static int              _cookie_initialized                    = 0;
-static pthread_mutex_t* _mutex_buf                             = NULL;
+// static pthread_mutex_t* _mutex_buf                             = NULL;
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -90,17 +90,17 @@ static unsigned long _dtlsIdCallback(void)
     return (unsigned long)pthread_self();
 }
 
-static void _sslLockFunc(int mode, int n, const char *file, int line)
-{
-    if (mode & CRYPTO_LOCK)
-    {
-        pthread_mutex_lock(&_mutex_buf[n]);
-    }
-    else
-    {
-        pthread_mutex_unlock(&_mutex_buf[n]);
-    }
-}
+// static void _sslLockFunc(int mode, int n, const char *file, int line)
+// {
+//     if (mode & CRYPTO_LOCK)
+//     {
+//         pthread_mutex_lock(&_mutex_buf[n]);
+//     }
+//     else
+//     {
+//         pthread_mutex_unlock(&_mutex_buf[n]);
+//     }
+// }
 
 static tDtlsStatus _checkSslWrite(SSL* ssl, char* buffer, int len)
 {
@@ -807,40 +807,40 @@ int dtls_send(tDtls* dtls, void* data, int data_len)
 
 ////////////////////////////////////////////////////////////////////////////////
 
-tDtlsStatus dtls_system_init(void)
-{
-    _mutex_buf = (pthread_mutex_t*)calloc(sizeof(pthread_mutex_t),
-                                          CRYPTO_num_locks());
-    check_if(_mutex_buf == NULL, return DTLS_ERROR, "calloc failed");
+// tDtlsStatus dtls_system_init(void)
+// {
+//     _mutex_buf = (pthread_mutex_t*)calloc(sizeof(pthread_mutex_t),
+//                                           CRYPTO_num_locks());
+//     check_if(_mutex_buf == NULL, return DTLS_ERROR, "calloc failed");
 
-    int i;
-    for (i=0; i<CRYPTO_num_locks(); i++)
-    {
-        pthread_mutex_init(&_mutex_buf[i], NULL);
-    }
+//     int i;
+//     for (i=0; i<CRYPTO_num_locks(); i++)
+//     {
+//         pthread_mutex_init(&_mutex_buf[i], NULL);
+//     }
 
-    CRYPTO_set_id_callback(_dtlsIdCallback);
-    CRYPTO_set_locking_callback(_sslLockFunc);
+//     CRYPTO_set_id_callback(_dtlsIdCallback);
+//     CRYPTO_set_locking_callback(_sslLockFunc);
 
-    return DTLS_OK;
-}
+//     return DTLS_OK;
+// }
 
-void dtls_system_uninit(void)
-{
-    check_if(_mutex_buf == NULL, return, "_mutex_buf is null");
+// void dtls_system_uninit(void)
+// {
+//     check_if(_mutex_buf == NULL, return, "_mutex_buf is null");
 
-    CRYPTO_set_id_callback(NULL);
-    CRYPTO_set_locking_callback(NULL);
+//     CRYPTO_set_id_callback(NULL);
+//     CRYPTO_set_locking_callback(NULL);
 
-    int i;
-    for (i=0; i<CRYPTO_num_locks(); i++)
-    {
-        pthread_mutex_destroy(&_mutex_buf[i]);
-    }
+//     int i;
+//     for (i=0; i<CRYPTO_num_locks(); i++)
+//     {
+//         pthread_mutex_destroy(&_mutex_buf[i]);
+//     }
 
-    free(_mutex_buf);
-    _mutex_buf = NULL;
+//     free(_mutex_buf);
+//     _mutex_buf = NULL;
 
-    return;
-}
+//     return;
+// }
 
