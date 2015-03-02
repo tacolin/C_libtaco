@@ -31,6 +31,14 @@ int main(int argc, char const *argv[])
 
     if (argc == 2)
     {
+        //////////////////////////////////////////////
+        //  Server Mode
+        //  ./test_dtls [local port]
+        //
+        //  for example:
+        //  ./test_dtls 50000
+        //////////////////////////////////////////////
+
         int port = atoi(argv[1]);
 
         dtls_server_init(&_server, NULL, port,
@@ -149,6 +157,15 @@ int main(int argc, char const *argv[])
     }
     else if (argc >= 3)
     {
+        /////////////////////////////////////////////////////////////
+        //  Client Mode
+        //  ./test_dtls [remote_ip] [remote_port] [local_port]
+        //
+        //  for example:
+        //  ./test_dtls 192.168.20.10 50000 40000
+        //  ./test_dtls 192.168.20.10 50000 -> local_port is random
+        /////////////////////////////////////////////////////////////
+
         int remote_port = atoi(argv[2]);
         int local_port = DTLS_PORT_ANY;
 
