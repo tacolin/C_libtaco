@@ -171,7 +171,7 @@ tTaskStatus task_system_init(void)
     int check = pthread_mutex_init(&_task_lock, NULL);
     check_if(check != 0, return TASK_ERROR, "pthread_mutext_init failed");
 
-    list_init(&_task_list, "TASK LIST", _taskCleanFunc);
+    list_init(&_task_list, _taskCleanFunc);
 
     _system_init_flag = 1;
 

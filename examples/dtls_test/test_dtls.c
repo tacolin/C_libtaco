@@ -85,7 +85,7 @@ int main(int argc, char const *argv[])
         tList dtls_list;
         tDtls* dtls = NULL;
 
-        list_init(&dtls_list, "DTLS LIST", _destroyDtls);
+        list_init(&dtls_list, _destroyDtls);
 
         while (_running)
         {

@@ -178,7 +178,7 @@ tTimerStatus timer_system_init(void)
 {
     if (_system_init_flag == 0)
     {
-        list_init(&_running_list, "timer running list", _cleanRunningTimer);
+        list_init(&_running_list, _cleanRunningTimer);
         lock_init(&_running_lock);
 
         _action.sa_flags     = SA_SIGINFO;

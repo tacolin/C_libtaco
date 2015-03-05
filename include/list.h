@@ -5,10 +5,6 @@
 
 ////////////////////////////////////////////////////////////////////////////////
 
-#define LIST_NAME_SIZE 20
-
-////////////////////////////////////////////////////////////////////////////////
-
 #define LIST_FOREACH(pList, content) for(content = list_head(pList); content; content = list_next(pList, content))
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -45,7 +41,6 @@ typedef struct tList
     tListObj* tail;
 
     int num;
-    char name[LIST_NAME_SIZE+1];
 
     tListContentCleanFn cleanfn;
 
@@ -53,7 +48,7 @@ typedef struct tList
 
 ////////////////////////////////////////////////////////////////////////////////
 
-tListStatus list_init(tList* list, char* name, tListContentCleanFn clean_fn);
+tListStatus list_init(tList* list, tListContentCleanFn clean_fn);
 void list_clean(tList* list);
 
 tListStatus list_insert(tList* list, void* content);

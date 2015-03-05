@@ -18,7 +18,7 @@ int main(int argc, char const *argv[])
 {
     tList list;
 
-    list_init(&list, "Test List", NULL);
+    list_init(&list, NULL);
 
     list_append(&list, (void*)1);
     list_append(&list, (void*)2);
