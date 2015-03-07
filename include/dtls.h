@@ -16,7 +16,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #define DTLS_PATH_SIZE 108
-
 #define DTLS_PORT_ANY -1
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -72,6 +71,10 @@ typedef struct tDtls
 } tDtls;
 
 ////////////////////////////////////////////////////////////////////////////////
+
+tDtlsStatus dtls_toSockAddr(tDtlsAddr dtls_addr, struct sockaddr_in* sock_addr);
+
+tDtlsStatus dtls_toDtlsAddr(struct sockaddr_in sock_addr, tDtlsAddr* dtls_addr);
 
 tDtlsStatus dtls_server_init(tDtlsServer* server,
                              char* local_ip, int local_port,
