@@ -104,13 +104,13 @@ static void _cleanEv(void* content)
 
 ////////////////////////////////////////////////////////////////////////////////
 
-static void _ioEvDefaultCb(tEvLoop* loop, tEvIo* io)
+static void _procIoEv(tEvLoop* loop, tEvIo* io)
 {
     io->callback(loop, io, io->arg);
     return;
 }
 
-static void _tmEvDefaultCb(tEvLoop* loop, tEvTimer* tm)
+static void _procTimerEv(tEvLoop* loop, tEvTimer* tm)
 {
     uint64_t val;
     ssize_t val_size = sizeof(val);
@@ -122,13 +122,14 @@ static void _tmEvDefaultCb(tEvLoop* loop, tEvTimer* tm)
     {
         _cleanTimerEv(tm); // clean function will not affect callback and arg
         list_remove(&loop->evlist, tm);
+        tm->is_started = 0;
     }
 
     tm->callback(loop, tm, tm->arg);
     return;
 }
 
-static void _sigEvDefaultCb(tEvLoop* loop, tEvSignal* sig)
+static void _procSignalEv(tEvLoop* loop, tEvSignal* sig)
 {
     struct signalfd_siginfo info = {};
     ssize_t info_size            = sizeof(info);
@@ -141,7 +142,7 @@ static void _sigEvDefaultCb(tEvLoop* loop, tEvSignal* sig)
     return;
 }
 
-static void _onceEvDefaultCb(tEvLoop* loop, tEvOnce* once)
+static void _procOnceEv(tEvLoop* loop, tEvOnce* once)
 {
     eventfd_t val;
 
@@ -162,19 +163,19 @@ static void _procEv(tEvLoop* loop, tEvBase* base)
     switch (base->type)
     {
         case EV_ONCE:
-            _onceEvDefaultCb(loop, (tEvOnce*)base);
+            _procOnceEv(loop, (tEvOnce*)base);
             break;
 
         case EV_IO:
-            _ioEvDefaultCb(loop, (tEvIo*)base);
+            _procIoEv(loop, (tEvIo*)base);
             break;
 
         case EV_TIMER:
-            _tmEvDefaultCb(loop, (tEvTimer*)base);
+            _procTimerEv(loop, (tEvTimer*)base);
             break;
 
         case EV_SIGNAL:
-            _sigEvDefaultCb(loop, (tEvSignal*)base);
+            _procSignalEv(loop, (tEvSignal*)base);
             break;
 
         default:
@@ -380,6 +381,8 @@ tEvStatus evsig_stop(tEvLoop* loop, tEvSignal* sig)
     _exitLock(loop);
     check_if(list_ret != LIST_OK, return EV_ERROR, "list_remove failed");
 
+    sig->is_started = 0;
+
     return EV_OK;
 }
 
@@ -398,6 +401,7 @@ tEvStatus evtm_init(tEvTimer* tm, tEvTimerCb callback, int time_ms, void* arg, t
     tm->is_started = 0;
     tm->callback   = callback;
     tm->time_ms    = time_ms;
+    tm->rest_ms    = -1;
     tm->tm_type    = type;
 
     tm->is_init    = 1;
@@ -478,6 +482,8 @@ tEvStatus evtm_stop(tEvLoop* loop, tEvTimer* tm)
     tListStatus list_ret = list_remove(&loop->evlist, tm);
     _exitLock(loop);
     check_if(list_ret != LIST_OK, return EV_ERROR, "list_remove failed");
+
+    tm->is_started = 0;
 
     return EV_OK;
 
@@ -606,6 +612,8 @@ tEvStatus evio_stop(tEvLoop* loop, tEvIo* io)
     tListStatus list_ret = list_remove(&loop->evlist, io);
     _exitLock(loop);
     check_if(list_ret != LIST_OK, return EV_ERROR, "list_remove failed");
+
+    io->is_started = 0;
 
     return EV_OK;
 }

@@ -97,6 +97,7 @@ typedef struct tEvTimer
 
     tEvTimerType tm_type;
     int time_ms;
+    int rest_ms;
 
     void (*callback)(tEvLoop* loop, struct tEvTimer* tm, void* arg);
 
