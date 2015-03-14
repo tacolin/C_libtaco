@@ -143,7 +143,7 @@ tEvStatus evtm_start(tEvLoop* loop, tEvTimer* tm);
 tEvStatus evtm_stop(tEvLoop* loop, tEvTimer* tm);
 // tEvStatus evtm_pause(tEvLoop* loop, tEvTimer* tm);
 // tEvStatus evtm_resume(tEvLoop* loop, tEvTimer* tm);
-// tEvStatus evtm_restart(tEvLoop* loop, tEvTimer* tm);
+tEvStatus evtm_restart(tEvLoop* loop, tEvTimer* tm);
 
 ////////////////////////////////////////////////////////////////////////////////
 

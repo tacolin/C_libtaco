@@ -491,6 +491,23 @@ _ERROR:
     return EV_ERROR;
 }
 
+// tEvStatus evtm_pause(tEvLoop* loop, tEvTimer* tm);
+// tEvStatus evtm_resume(tEvLoop* loop, tEvTimer* tm);
+
+tEvStatus evtm_restart(tEvLoop* loop, tEvTimer* tm)
+{
+    check_if(loop == NULL, return EV_ERROR, "loop is null");
+    check_if(loop->is_init != 1, return EV_ERROR, "loop is not init yet");
+    check_if(tm == NULL, return EV_ERROR, "tm is null");
+    check_if(tm->fd <= 0, return EV_ERROR, "fd = %d invalid", tm->fd);
+    check_if(tm->is_init != 1, return EV_ERROR, "tm is not init yet");
+
+    if (tm->is_started) evtm_stop(loop, tm);
+
+    return evtm_start(loop, tm);
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////
 
 tEvStatus ev_once(tEvLoop* loop, tEvOnceCb callback, void* arg)
