@@ -54,7 +54,7 @@ int main(int argc, char const *argv[])
     evio_start(&loop, &io);
 
     tEvTimer tm1 = {};
-    evtm_init(&tm1, _tm1Cb, 5000, NULL, EV_TIMER_ONCE);
+    evtm_init(&tm1, _tm1Cb, 5000, NULL, EV_TIMER_ONSHOT);
     evtm_start(&loop, &tm1);
 
     tEvTimer tm2 = {};

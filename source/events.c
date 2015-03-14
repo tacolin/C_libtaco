@@ -1,8 +1,12 @@
 #include "events.h"
 #include <string.h>
 
+////////////////////////////////////////////////////////////////////////////////
+
 static void _enterLock(tEvLoop* loop)
 {
+    // if caller thread is different with the evloop running thread, enter / exit lock
+    // else do nothing
     if (loop->tid != pthread_self()) lock_enter(&loop->evlock);
 }
 
@@ -11,50 +15,59 @@ static void _exitLock(tEvLoop* loop)
     if (loop->tid != pthread_self()) lock_exit(&loop->evlock);
 }
 
-static void _ioEvClean(void* content)
-{
-    tEvIo* io = (tEvIo*)content;
+////////////////////////////////////////////////////////////////////////////////
 
+static void _cleanIoEv(tEvIo* io)
+{
+    // io fd should be maintained by user self, not by evloop system
+    // do epoll ctrl deletion only
     struct epoll_event tmp = {};
     epoll_ctl(io->loop->epfd, EPOLL_CTL_DEL, io->fd, &tmp);
 
     return;
 }
 
-static void _tmEvClean(void* content)
+static void _cleanOnceEv(tEvOnce* once)
 {
-    tEvTimer* tm  = (tEvTimer*)content;
+    // default callback will do epoll ctrl deletion
 
+    // close eventfd and free memory
+    close(once->fd);
+    free(once);
+    return;
+}
+
+static void _cleanTimerEv(tEvTimer* tm)
+{
+    // stop the timerfd in linux
     struct itimerspec timeval = {};
     timerfd_settime(tm->fd, 0, &timeval, NULL);
 
+    // epoll ctrl deletion
     struct epoll_event tmp = {};
     epoll_ctl(tm->loop->epfd, EPOLL_CTL_DEL, tm->fd, &tmp);
 
+    // close timerfd
     close(tm->fd);
     tm->fd = -1;
     return;
 }
 
-static void _sigEvClean(tEvSignal* sig)
+static void _cleanSignalEv(tEvSignal* sig)
 {
+    // unblock the signal handling, give the control back to linux
     sigset_t mask;
     sigemptyset(&mask);
     sigaddset(&mask, sig->signum);
     sigprocmask(SIG_UNBLOCK, &mask, NULL);
 
+    //  epoll ctrl deletion
     struct epoll_event tmpev = {};
     epoll_ctl(sig->loop->epfd, EPOLL_CTL_DEL, sig->fd, &tmpev);
 
+    // close signal fd
     close(sig->fd);
     sig->fd = -1;
-    return;
-}
-
-static void _onceEvClean(tEvOnce* once)
-{
-    close(once->fd);
-    free(once);
     return;
 }
 
@@ -66,19 +79,19 @@ static void _cleanEv(void* content)
     switch (base->type)
     {
         case EV_SIGNAL:
-            _sigEvClean((tEvSignal*)base);
+            _cleanSignalEv((tEvSignal*)base);
             break;
 
         case EV_TIMER:
-            _tmEvClean((tEvTimer*)base);
+            _cleanTimerEv((tEvTimer*)base);
             break;
 
         case EV_ONCE:
-            _onceEvClean((tEvOnce*)base);
+            _cleanOnceEv((tEvOnce*)base);
             break;
 
         case EV_IO:
-            _ioEvClean((tEvIo*)base);
+            _cleanIoEv((tEvIo*)base);
             break;
 
         default:
@@ -88,6 +101,8 @@ static void _cleanEv(void* content)
 
     return;
 }
+
+////////////////////////////////////////////////////////////////////////////////
 
 static void _ioEvDefaultCb(tEvLoop* loop, tEvIo* io)
 {
@@ -103,9 +118,9 @@ static void _tmEvDefaultCb(tEvLoop* loop, tEvTimer* tm)
     ssize_t readlen = read(tm->fd, &val, val_size);
     check_if(readlen != val_size, return, "read failed");
 
-    if (tm->tm_type == EV_TIMER_ONCE) 
+    if (tm->tm_type == EV_TIMER_ONSHOT)
     {
-        _tmEvClean(tm); // clean function will not affect callback and arg
+        _cleanTimerEv(tm); // clean function will not affect callback and arg
         list_remove(&loop->evlist, tm);
     }
 
@@ -116,7 +131,7 @@ static void _tmEvDefaultCb(tEvLoop* loop, tEvTimer* tm)
 static void _sigEvDefaultCb(tEvLoop* loop, tEvSignal* sig)
 {
     struct signalfd_siginfo info = {};
-    ssize_t info_size = sizeof(info);
+    ssize_t info_size            = sizeof(info);
 
     ssize_t readlen = read(sig->fd, &info, sizeof(info));
     check_if(readlen != info_size, return, "read failed");
@@ -133,11 +148,11 @@ static void _onceEvDefaultCb(tEvLoop* loop, tEvOnce* once)
     int check = eventfd_read(once->fd, &val);
     check_if(check < 0, return, "eventfd_read failed");
 
-    list_remove(&loop->evlist, once);
+    list_remove(&loop->evlist, once); // no need to do  lock protection for once event
 
     once->callback(loop, once->arg);
 
-    _onceEvClean(once); //_onceEvClean will free memory, you should do it after callback
+    _cleanOnceEv(once); //_cleanOnceEv will free memory, you should do it after callback
 
     return;
 }
@@ -168,6 +183,8 @@ static void _procEv(tEvLoop* loop, tEvBase* base)
     }
 }
 
+////////////////////////////////////////////////////////////////////////////////
+
 tEvStatus evloop_init(tEvLoop* loop, int max_ev_num)
 {
     check_if(loop == NULL, return EV_ERROR, "loop is null");
@@ -187,9 +204,10 @@ tEvStatus evloop_init(tEvLoop* loop, int max_ev_num)
     loop->evbuf = calloc(sizeof(struct epoll_event), max_ev_num);
     check_if(loop->evbuf == NULL, return EV_ERROR, "calloc failed");
 
-    loop->tid = pthread_self();
+    loop->is_running = 0;
+    loop->tid        = 0;
+    loop->is_init    = 1;
 
-    loop->is_init = 1;
     return EV_OK;
 }
 
@@ -206,8 +224,6 @@ tEvStatus evloop_uninit(tEvLoop* loop)
 
     lock_uninit(&loop->evlock);
 
-    loop->max_ev_num = 0;
-
     if (loop->evbuf) free(loop->evbuf);
 
     if (loop->epfd > 0)
@@ -216,7 +232,10 @@ tEvStatus evloop_uninit(tEvLoop* loop)
         loop->epfd = -1;
     }
 
-    loop->is_init = 0;
+    loop->max_ev_num = 0;
+    loop->tid        = 0;
+    loop->is_init    = 0;
+
     return EV_OK;
 }
 
@@ -227,6 +246,7 @@ tEvStatus evloop_run(tEvLoop* loop)
     check_if(loop->is_running != 0, return EV_ERROR, "loop has been already running");
 
     loop->is_running = 1;
+    loop->tid        = pthread_self();
 
     int ev_num;
     int i;
@@ -246,7 +266,7 @@ tEvStatus evloop_run(tEvLoop* loop)
                 ev = (tEvBase*)(loop->evbuf[i].data.ptr);
                 check_if(ev == NULL, goto _ERROR, "epoll ev ptr is null");
 
-                lock_enter(&loop->evlock);
+                lock_enter(&loop->evlock); // we must enterlock here, so do not use _enterLock();
                 _procEv(loop, ev);
                 lock_exit(&loop->evlock);
             }
@@ -256,8 +276,7 @@ tEvStatus evloop_run(tEvLoop* loop)
     return EV_OK;
 
 _ERROR:
-    return EV_ERROR;    
-
+    return EV_ERROR;
 }
 
 tEvStatus evloop_break(tEvLoop* loop)
@@ -268,11 +287,13 @@ tEvStatus evloop_break(tEvLoop* loop)
 
     loop->is_running = 0;
 
-    _enterLock(loop);
+    _enterLock(loop); // wait for loop exit
     _exitLock(loop);
 
     return EV_OK;
 }
+
+////////////////////////////////////////////////////////////////////////////////
 
 tEvStatus evsig_init(tEvSignal* sig, tEvSignalCb callback, int signum, void* arg)
 {
@@ -304,15 +325,16 @@ tEvStatus evsig_start(tEvLoop* loop, tEvSignal* sig)
     sigset_t mask;
     sigemptyset(&mask);
     sigaddset(&mask, sig->signum);
- 
+
     // Block the signals thet we handle using signalfd(), so they don't
     // cause signal handlers or default signal actions to execute.
     int check = sigprocmask(SIG_BLOCK, &mask, NULL);
     check_if(check < 0, return EV_ERROR, "sigprocmask failed");
- 
+
     sig->fd = signalfd(-1, &mask, 0);
     check_if(sig->fd <= 0, return EV_ERROR, "signalfd failed");
 
+    // use lock to protect list operation (append, access and remove)
     _enterLock(loop);
     tListStatus list_ret = list_append(&loop->evlist, sig);
     _exitLock(loop);
@@ -331,7 +353,7 @@ tEvStatus evsig_start(tEvLoop* loop, tEvSignal* sig)
     return EV_OK;
 
 _ERROR:
-    if (sig->fd > 0) 
+    if (sig->fd > 0)
     {
         close(sig->fd);
         sig->fd = -1;
@@ -349,9 +371,9 @@ tEvStatus evsig_stop(tEvLoop* loop, tEvSignal* sig)
     check_if(sig == NULL, return EV_ERROR, "sig is null");
     check_if(sig->fd <= 0, return EV_ERROR, "fd = %d invalid", sig->fd);
     check_if(sig->is_init != 1, return EV_ERROR, "sig is not init yet");
-    check_if(sig->is_started == 0, return EV_ERROR, "sig is not started");
+    check_if(sig->is_started != 1, return EV_ERROR, "sig is not started");
 
-    _sigEvClean(sig);
+    _cleanSignalEv(sig);
 
     _enterLock(loop);
     tListStatus list_ret = list_remove(&loop->evlist, sig);
@@ -389,6 +411,7 @@ tEvStatus evtm_start(tEvLoop* loop, tEvTimer* tm)
     check_if(loop->is_init != 1, return EV_ERROR, "loop is not init yet");
     check_if(tm == NULL, return EV_ERROR, "tm is null");
     check_if(tm->is_init != 1, return EV_ERROR, "tm is not init yet");
+    check_if(tm->is_started != 0, return EV_ERROR, "tm has been already started");
 
     tm->fd = timerfd_create(CLOCK_MONOTONIC, 0);
     check_if(tm->fd < 0, return EV_ERROR, "timerfd_create failed");
@@ -398,7 +421,7 @@ tEvStatus evtm_start(tEvLoop* loop, tEvTimer* tm)
 
     struct itimerspec timeval = {
         .it_value.tv_sec = sec,
-        .it_value.tv_nsec = nsec,    
+        .it_value.tv_nsec = nsec,
     };
 
     if (tm->tm_type == EV_TIMER_PERIODIC)
@@ -449,7 +472,7 @@ tEvStatus evtm_stop(tEvLoop* loop, tEvTimer* tm)
     check_if(tm->is_init != 1, return EV_ERROR, "tm is not init yet");
     check_if(tm->is_started != 1, return EV_ERROR, "tm is not started");
 
-    _tmEvClean(tm);
+    _cleanTimerEv(tm);
 
     _enterLock(loop);
     tListStatus list_ret = list_remove(&loop->evlist, tm);
@@ -474,19 +497,14 @@ tEvStatus ev_once(tEvLoop* loop, tEvOnceCb callback, void* arg)
     check_if(once == NULL, return EV_ERROR, "calloc failed");
 
     // init
-    once->type = EV_ONCE;
-    once->arg = arg;
+    once->type     = EV_ONCE;
+    once->arg      = arg;
     once->callback = callback;
-    once->is_init = 1;
+    once->is_init  = 1;
 
     // start
     once->fd = eventfd(0, 0);
     check_if(once->fd < 0, goto _ERROR, "eventfd failed");
-
-    struct epoll_event tmp = {
-        .events = EPOLLIN,
-        .data.ptr = once,
-    };
 
     int ep_check = -1;
     int wr_check = -1;
@@ -496,6 +514,11 @@ tEvStatus ev_once(tEvLoop* loop, tEvOnceCb callback, void* arg)
     _exitLock(loop);
     check_if(list_ret != LIST_OK, goto _ERROR, "list_append failed");
 
+    struct epoll_event tmp = {
+        .events = EPOLLIN,
+        .data.ptr = once,
+    };
+
     ep_check = epoll_ctl(loop->epfd, EPOLL_CTL_ADD, once->fd, &tmp);
     check_if(ep_check < 0, goto _ERROR, "epoll_ctl add failed");
 
@@ -503,7 +526,7 @@ tEvStatus ev_once(tEvLoop* loop, tEvOnceCb callback, void* arg)
     wr_check = eventfd_write(once->fd, val);
     check_if(wr_check < 0, goto _ERROR, "eventfd_write failed");
 
-    once->loop = loop;
+    once->loop       = loop;
     once->is_started = 1;
 
     return EV_OK;
@@ -522,7 +545,7 @@ tEvStatus evio_init(tEvIo* io, tEvIoCb callback, int fd, void* arg)
 {
     check_if(io == NULL, return EV_ERROR, "io is null");
     check_if(callback == NULL, return EV_ERROR, "callback is null");
-    // check_if(fd <= 0, return EV_ERROR, "fd = %d invalid", fd);
+    check_if(fd < 0, return EV_ERROR, "fd = %d invalid", fd); // stdin's fd = 0
 
     io->type       = EV_IO;
     io->fd         = fd;
@@ -542,6 +565,7 @@ tEvStatus evio_start(tEvLoop* loop, tEvIo* io)
     check_if(loop->is_init != 1, return EV_ERROR, "loop is not init yet");
     check_if(io == NULL, return EV_ERROR, "io is null");
     check_if(io->is_init != 1, return EV_ERROR, "io is not init yet");
+    check_if(io->is_started != 0, return EV_ERROR, "io has been already started");
 
     _enterLock(loop);
     tListStatus list_ret = list_append(&loop->evlist, io);
@@ -552,6 +576,7 @@ tEvStatus evio_start(tEvLoop* loop, tEvIo* io)
         .events = EPOLLIN,
         .data.ptr = io,
     };
+
     int check = epoll_ctl(loop->epfd, EPOLL_CTL_ADD, io->fd, &tmp);
     check_if(check < 0, goto _ERROR, "epoll_ctl add failed");
 
@@ -575,7 +600,7 @@ tEvStatus evio_stop(tEvLoop* loop, tEvIo* io)
     check_if(io->is_init != 1, return EV_ERROR, "io is not init yet");
     check_if(io->is_started != 1, return EV_ERROR, "io is not started");
 
-    _ioEvClean(io);
+    _cleanIoEv(io);
 
     _enterLock(loop);
     tListStatus list_ret = list_remove(&loop->evlist, io);
