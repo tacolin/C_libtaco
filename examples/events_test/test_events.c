@@ -43,7 +43,7 @@ static void _tm2Cb(tEvLoop* loop, tEvTimer* tm, void* arg)
 int main(int argc, char const *argv[])
 {
     tEvLoop loop = {};
-    evloop_init(&loop, 100);
+    evloop_init(&loop, 50);
 
     tEvSignal sig = {};
     evsig_init(&sig, _sigIntCb, SIGINT, NULL);

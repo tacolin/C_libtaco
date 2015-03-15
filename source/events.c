@@ -322,6 +322,7 @@ tEvStatus evsig_start(tEvLoop* loop, tEvSignal* sig)
     check_if(sig == NULL, return EV_ERROR, "sig is null");
     check_if(sig->is_init != 1, return EV_ERROR, "sig is not init yet");
     check_if(sig->is_started != 0, return EV_ERROR, "sig has already been started");
+    check_if(list_length(&loop->evlist) >= loop->max_ev_num, return EV_ERROR, "current ev_num (%d) >= max_ev_num (%d)", list_length(&loop->evlist), loop->max_ev_num);
 
     sigset_t mask;
     sigemptyset(&mask);
@@ -416,6 +417,7 @@ tEvStatus evtm_start(tEvLoop* loop, tEvTimer* tm)
     check_if(tm == NULL, return EV_ERROR, "tm is null");
     check_if(tm->is_init != 1, return EV_ERROR, "tm is not init yet");
     check_if(tm->is_started != 0, return EV_ERROR, "tm has been already started");
+    check_if(list_length(&loop->evlist) >= loop->max_ev_num, return EV_ERROR, "current ev_num (%d) >= max_ev_num (%d)", list_length(&loop->evlist), loop->max_ev_num);
 
     tm->fd = timerfd_create(CLOCK_MONOTONIC, 0);
     check_if(tm->fd < 0, return EV_ERROR, "timerfd_create failed");
@@ -515,6 +517,7 @@ tEvStatus ev_once(tEvLoop* loop, tEvOnceCb callback, void* arg)
     check_if(loop == NULL, return EV_ERROR, "loop is null");
     check_if(loop->is_init != 1, return EV_ERROR, "loop is not init yet");
     check_if(callback == NULL, return EV_ERROR, "callback is null");
+    check_if(list_length(&loop->evlist) >= loop->max_ev_num, return EV_ERROR, "current ev_num (%d) >= max_ev_num (%d)", list_length(&loop->evlist), loop->max_ev_num);
 
     tEvOnce* once = calloc(sizeof(tEvOnce), 1);
     check_if(once == NULL, return EV_ERROR, "calloc failed");
@@ -589,6 +592,7 @@ tEvStatus evio_start(tEvLoop* loop, tEvIo* io)
     check_if(io == NULL, return EV_ERROR, "io is null");
     check_if(io->is_init != 1, return EV_ERROR, "io is not init yet");
     check_if(io->is_started != 0, return EV_ERROR, "io has been already started");
+    check_if(list_length(&loop->evlist) >= loop->max_ev_num, return EV_ERROR, "current ev_num (%d) >= max_ev_num (%d)", list_length(&loop->evlist), loop->max_ev_num);
 
     _enterLock(loop);
     tListStatus list_ret = list_append(&loop->evlist, io);
