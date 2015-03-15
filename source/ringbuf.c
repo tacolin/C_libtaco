@@ -66,6 +66,7 @@ void* ringbuf_preWrite(tRingBuf* rb)
 {
     check_if(rb == NULL, return NULL, "rb is null");
     check_if(rb->size <= 0, return NULL, "rb->size = %d invalid", rb->size);
+    check_if(rb->elements == NULL, return NULL, "rb->elements is null");
 
     return rb->elements + rb->elem_size * rb->end;
 }
@@ -74,6 +75,7 @@ tRbStatus ringbuf_postWrite(tRingBuf* rb)
 {
     check_if(rb == NULL, return RB_ERROR, "rb is null");
     check_if(rb->size <= 0, return RB_ERROR, "rb->size = %d invalid", rb->size);
+    check_if(rb->elements == NULL, return RB_ERROR, "rb->elements is null");
 
     if (ringbuf_isFull(rb)) _increaseRb(rb, &rb->start, &rb->s_msb);
 
@@ -99,6 +101,7 @@ void* ringbuf_preRead(tRingBuf* rb)
 {
     check_if(rb == NULL, return NULL, "rb is null");
     check_if(rb->size <= 0, return NULL, "rb->size = %d invalid", rb->size);
+    check_if(rb->elements == NULL, return NULL, "rb->elements is null");
 
     if (ringbuf_isEmpty(rb)) return NULL;
 
@@ -109,6 +112,7 @@ tRbStatus ringbuf_postRead(tRingBuf* rb)
 {
     check_if(rb == NULL, return RB_ERROR, "rb is null");
     check_if(rb->size <= 0, return RB_ERROR, "rb->size = %d invalid", rb->size);
+    check_if(rb->elements == NULL, return RB_ERROR, "rb->elements is null");
 
     if (ringbuf_isEmpty(rb)) return RB_ERROR;
 
