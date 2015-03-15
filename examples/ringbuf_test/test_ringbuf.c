@@ -13,7 +13,7 @@ int main(int argc, char const *argv[])
 
     dprint("1st Ring Use Case : tTaco Structure write and read");
 
-    ringbuf_init(&rb, 10, sizeof(tTaco), NULL, NULL);
+    ringbuf_init(&rb, 10, sizeof(tTaco));
 
     int i;
     tTaco taco;

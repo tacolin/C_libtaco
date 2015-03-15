@@ -27,7 +27,7 @@ int ringbuf_isEmpty(tRingBuf* rb)
     return (rb->end == rb->start) && (rb->e_msb == rb->s_msb);
 }
 
-tRbStatus ringbuf_init(tRingBuf* rb, int rb_size, int elem_size, tRbReadFn read_fn, tRbWriteFn write_fn)
+tRbStatus ringbuf_init(tRingBuf* rb, int rb_size, int elem_size)
 {
     check_if(rb == NULL, return RB_ERROR, "rb is null");
     check_if(rb_size <= 0, return RB_ERROR, "rb_size = %d invalid", rb_size);
@@ -45,8 +45,6 @@ tRbStatus ringbuf_init(tRingBuf* rb, int rb_size, int elem_size, tRbReadFn read_
     check_if(rb->elements == NULL, return RB_ERROR, "calloc failed");
 
     rb->elem_size = elem_size;
-    rb->read_fn   = read_fn;
-    rb->write_fn  = write_fn;
 
     return RB_OK;
 }
@@ -92,14 +90,7 @@ tRbStatus ringbuf_write(tRingBuf* rb, void* input)
     void* elem = ringbuf_preWrite(rb);
     if (elem == NULL) return RB_ERROR;
 
-    if (rb->write_fn)
-    {
-        rb->write_fn(input, elem);
-    }
-    else
-    {
-        memcpy(elem, input, rb->elem_size);
-    }
+    memcpy(elem, input, rb->elem_size);
 
     return ringbuf_postWrite(rb);
 }
@@ -134,14 +125,7 @@ tRbStatus ringbuf_read(tRingBuf* rb, void* output)
     void* elem = ringbuf_preRead(rb);
     if (elem == NULL) return RB_ERROR;
 
-    if (rb->read_fn)
-    {
-        rb->read_fn(elem, output);
-    }
-    else
-    {
-        memcpy(output, elem, rb->elem_size);
-    }
+    memcpy(output, elem, rb->elem_size);
 
     return ringbuf_postRead(rb);
 }

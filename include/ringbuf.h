@@ -12,9 +12,6 @@ typedef enum
 
 } tRbStatus;
 
-typedef void (*tRbWriteFn)(void* input, void* buf);
-typedef void (*tRbReadFn)(void* buf, void* output);
-
 typedef struct tRingBuf
 {
     int size;
@@ -26,12 +23,9 @@ typedef struct tRingBuf
     void* elements;
     int elem_size;
 
-    tRbWriteFn write_fn;
-    tRbReadFn  read_fn;
-
 } tRingBuf;
 
-tRbStatus ringbuf_init(tRingBuf* rb, int rb_size, int elem_size, tRbReadFn read_fn, tRbWriteFn write_fn);
+tRbStatus ringbuf_init(tRingBuf* rb, int rb_size, int elem_size);
 tRbStatus ringbuf_uninit(tRingBuf* rb);
 
 tRbStatus ringbuf_write(tRingBuf* rb, void* input);
