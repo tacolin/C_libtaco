@@ -27,7 +27,7 @@ int ringbuf_isEmpty(tRingBuf* rb)
     return (rb->end == rb->start) && (rb->e_msb == rb->s_msb);
 }
 
-tRbStatus ringbuf_init(tRingBuf* rb, int rb_size, int elem_size)
+tRbStatus ringbuf_init(tRingBuf* rb, int rb_size, int elem_size, void* elements)
 {
     check_if(rb == NULL, return RB_ERROR, "rb is null");
     check_if(rb_size <= 0, return RB_ERROR, "rb_size = %d invalid", rb_size);
@@ -41,8 +41,17 @@ tRbStatus ringbuf_init(tRingBuf* rb, int rb_size, int elem_size)
     rb->s_msb = 0;
     rb->e_msb = 0;
 
-    rb->elements = calloc(elem_size, rb_size);
-    check_if(rb->elements == NULL, return RB_ERROR, "calloc failed");
+    if (elements)
+    {
+        rb->elements = elements;
+        rb->is_need_free = 0;
+    }
+    else
+    {
+        rb->elements = calloc(elem_size, rb_size);
+        check_if(rb->elements == NULL, return RB_ERROR, "calloc failed");
+        rb->is_need_free = 1;
+    }
 
     rb->elem_size = elem_size;
 
@@ -53,7 +62,7 @@ tRbStatus ringbuf_uninit(tRingBuf* rb)
 {
     check_if(rb == NULL, return RB_ERROR, "rb is null");
 
-    if (rb->elements) 
+    if (rb->elements && rb->is_need_free) 
     {
         free(rb->elements);
     }

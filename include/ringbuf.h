@@ -23,9 +23,11 @@ typedef struct tRingBuf
     void* elements;
     int elem_size;
 
+    int is_need_free;
+
 } tRingBuf;
 
-tRbStatus ringbuf_init(tRingBuf* rb, int rb_size, int elem_size);
+tRbStatus ringbuf_init(tRingBuf* rb, int rb_size, int elem_size, void* elements);
 tRbStatus ringbuf_uninit(tRingBuf* rb);
 
 tRbStatus ringbuf_write(tRingBuf* rb, void* input);

@@ -13,7 +13,7 @@ int main(int argc, char const *argv[])
 
     dprint("1st Ring Use Case : tTaco Structure write and read");
 
-    ringbuf_init(&rb, 10, sizeof(tTaco));
+    ringbuf_init(&rb, 10, sizeof(tTaco), NULL);
 
     int i;
     tTaco taco;
@@ -31,9 +31,14 @@ int main(int argc, char const *argv[])
     }
     dprint("ringbuf is %s", ringbuf_isEmpty(&rb) ? "empty" : "not empty");
 
+    ringbuf_uninit(&rb);
+
     dprint("");
 
     dprint("2nd Ring Use Case : tTaco Structure pre-write and pre-read");
+
+    void* data = calloc(sizeof(tTaco), 10);
+    ringbuf_init(&rb, 10, sizeof(tTaco), data);
 
     tTaco *pre;
     for (i=0; i<47; i++)
@@ -52,6 +57,7 @@ int main(int argc, char const *argv[])
     dprint("ringbuf is %s", ringbuf_isEmpty(&rb) ? "empty" : "not empty");
 
     ringbuf_uninit(&rb);
+    free(data);
 
     dprint("over");
 
