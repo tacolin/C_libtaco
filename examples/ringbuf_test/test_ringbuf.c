@@ -59,6 +59,28 @@ int main(int argc, char const *argv[])
     ringbuf_uninit(&rb);
     free(data);
 
+    dprint("");
+
+    dprint("3nd Ring Use Case : tTaco Structure get-tail and get-prev");
+
+    ringbuf_init(&rb, 10, sizeof(tTaco), NULL);
+
+    for (i=0 ; i<10 ; i++)
+    {
+        taco.a = i;
+        ringbuf_write(&rb, &taco);
+    }
+    dprint("ringbuf is %s", ringbuf_isFull(&rb) ? "full" : "not full");
+
+    pre = ringbuf_tail(&rb);
+    for (i=0 ; i<15 ; i++)
+    {
+        dprint("taco.a = %d", pre->a);
+        pre = ringbuf_prev(&rb, pre);
+    }
+
+    ringbuf_uninit(&rb);
+
     dprint("over");
 
     return 0;

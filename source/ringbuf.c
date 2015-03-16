@@ -34,7 +34,7 @@ tRbStatus ringbuf_init(tRingBuf* rb, int rb_size, int elem_size, void* elements)
     check_if(elem_size <= 0, return RB_ERROR, "elem_size = %d invalid", elem_size);
 
     // memset(rb, 0, sizeof(tRingBuf));
-    
+
     rb->size  = rb_size;
     rb->start = 0;
     rb->end   = 0;
@@ -62,7 +62,7 @@ tRbStatus ringbuf_uninit(tRingBuf* rb)
 {
     check_if(rb == NULL, return RB_ERROR, "rb is null");
 
-    if (rb->elements && rb->is_need_free) 
+    if (rb->elements && rb->is_need_free)
     {
         free(rb->elements);
     }
@@ -141,4 +141,27 @@ tRbStatus ringbuf_read(tRingBuf* rb, void* output)
     memcpy(output, elem, rb->elem_size);
 
     return ringbuf_postRead(rb);
+}
+
+void* ringbuf_getTail(tRingBuf* rb)
+{
+    check_if(rb == NULL, return NULL, "rb is null");
+    check_if(rb->size <= 0, return NULL, "rb->size = %d invalid", rb->size);
+    check_if(rb->elements == NULL, return NULL, "rb->elements is null");
+
+    if (rb->end == 0) rb->elements + rb->elem_size * (rb->size - 1);
+
+    return rb->elements + rb->elem_size * rb->end;
+}
+
+void* ringbuf_getPrev(tRingBuf* rb, void* elem)
+{
+    check_if(rb == NULL, return NULL, "rb is null");
+    check_if(elem == NULL, return NULL, "elem is null");
+    check_if(rb->size <= 0, return NULL, "rb->size = %d invalid", rb->size);
+    check_if(rb->elements == NULL, return NULL, "rb->elements is null");
+
+    if (rb->elements == elem) return rb->elements + rb->elem_size * (rb->size - 1);
+
+    return elem - rb->elem_size;
 }

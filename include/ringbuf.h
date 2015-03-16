@@ -5,7 +5,7 @@
 
 #include "basic.h"
 
-typedef enum 
+typedef enum
 {
     RB_OK = 0,
     RB_ERROR = -1
@@ -41,5 +41,8 @@ tRbStatus ringbuf_postRead(tRingBuf* rb);
 
 void* ringbuf_preWrite(tRingBuf* rb);
 tRbStatus ringbuf_postWrite(tRingBuf* rb);
+
+void* ringbuf_tail(tRingBuf* rb);
+void* ringbuf_prev(tRingBuf* rb, void* elem);
 
 #endif //_RING_BUF_H_
