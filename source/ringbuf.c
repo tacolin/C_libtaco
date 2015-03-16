@@ -143,7 +143,7 @@ tRbStatus ringbuf_read(tRingBuf* rb, void* output)
     return ringbuf_postRead(rb);
 }
 
-void* ringbuf_getTail(tRingBuf* rb)
+void* ringbuf_tail(tRingBuf* rb)
 {
     check_if(rb == NULL, return NULL, "rb is null");
     check_if(rb->size <= 0, return NULL, "rb->size = %d invalid", rb->size);
@@ -154,7 +154,7 @@ void* ringbuf_getTail(tRingBuf* rb)
     return rb->elements + rb->elem_size * rb->end;
 }
 
-void* ringbuf_getPrev(tRingBuf* rb, void* elem)
+void* ringbuf_prev(tRingBuf* rb, void* elem)
 {
     check_if(rb == NULL, return NULL, "rb is null");
     check_if(elem == NULL, return NULL, "elem is null");
