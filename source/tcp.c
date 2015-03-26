@@ -49,6 +49,10 @@ tTcpStatus tcp_server_init(tTcpServer* server, char* local_ip, int local_port, i
     server->fd = socket(AF_INET, SOCK_STREAM, 0);
     check_if(server->fd < 0, return TCP_ERROR, "sock failed");
 
+    int on = 1;
+    check = setsockopt(server->fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+    check_if(check < 0, goto _ERROR, "setsockopt reuseaddr failed");
+
     check = bind(server->fd, (struct sockaddr*)&me, sizeof(me));
     check_if(check < 0, goto _ERROR, "bind failed");
 
