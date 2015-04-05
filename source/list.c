@@ -22,13 +22,13 @@ static tListStatus _checkList(tList* list)
 
 ////////////////////////////////////////////////////////////////////////////////
 
-tListStatus list_init(tList* list, tListContentCleanFn clean_fn)
+tListStatus list_init(tList* list, tListContentCleanFn cleanfn)
 {
     check_if(list == NULL, return LIST_ERROR, "list is null");
 
     memset(list, 0, sizeof(tList));
 
-    list->cleanfn = clean_fn;
+    list->cleanfn = cleanfn;
 
     return LIST_OK;
 }

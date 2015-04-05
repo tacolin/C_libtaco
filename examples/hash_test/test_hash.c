@@ -1,3 +1,6 @@
+#define _GNU_SOURCE
+
+#include "basic.h"
 #include "hash.h"
 
 int main(int argc, char const *argv[])
@@ -10,17 +13,18 @@ int main(int argc, char const *argv[])
     hash_add(&table, "b", (void*)200);
     hash_add(&table, "c", (void*)300);
     hash_add(&table, "c", (void*)400);
+    hash_modify(&table, "c", (void*)400);
     hash_add(&table, "d", (void*)500);
     hash_add(&table, "e", (void*)600);
     hash_add(&table, "f", (void*)700);
 
+    char* key;
     void* value = NULL;
 
-    value = hash_find(&table, "a");
-    dprint("a = %ld", (long)value);
-
-    value = hash_find(&table, "b");
-    dprint("b = %ld", (long)value);
+    HASH_FOREACH(&table, key, value)
+    {
+        dprint("%s = %ld", key, (long)value);
+    }
 
     value = hash_find(&table, "c");
     dprint("c = %ld", (long)value);
@@ -28,7 +32,6 @@ int main(int argc, char const *argv[])
     hash_del(&table, "c", &value);
     dprint("delte c = %ld", (long)value);
 
-    char* key;
     HASH_FOREACH(&table, key, value)
     {
         dprint("%s = %ld", key, (long)value);

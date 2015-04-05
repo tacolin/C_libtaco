@@ -48,7 +48,7 @@ typedef struct tList
 
 ////////////////////////////////////////////////////////////////////////////////
 
-tListStatus list_init(tList* list, tListContentCleanFn clean_fn);
+tListStatus list_init(tList* list, tListContentCleanFn cleanfn);
 void list_clean(tList* list);
 
 tListStatus list_insert(tList* list, void* content);
