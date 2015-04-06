@@ -1,6 +1,6 @@
 cmake_minimum_required( VERSION 2.8.3 )
 
-project(test_events)
+project(events_test)
 
 taco_get_header_dirs(${CMAKE_CURRENT_LIST_DIR} _hdr_dirs)
 include_directories(${_hdr_dirs})

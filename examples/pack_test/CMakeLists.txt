@@ -1,6 +1,6 @@
 cmake_minimum_required( VERSION 2.8.3 )
 
-project(dtls_test)
+project(pack_test)
 
 taco_get_header_dirs(${CMAKE_CURRENT_LIST_DIR} _hdr_dirs)
 include_directories(${_hdr_dirs})
@@ -28,7 +28,6 @@ add_dependencies( ${PROJECT_NAME} taco )
 target_link_libraries( ${PROJECT_NAME} taco )
 
 install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION "${APP_INSTALL_DIR}")
-install(DIRECTORY "certs/" DESTINATION "${APP_INSTALL_DIR}/certs/")
 
 add_custom_target("run-${PROJECT_NAME}"
                   DEPENDS ${PROJECT_NAME} taco)
