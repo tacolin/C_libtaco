@@ -4,7 +4,7 @@
 tListBool largerThan(void* content, void* arg)
 {
     long num = (long)arg;
-    long get = (long)content;
+    long get = *(long*)content;
 
     if (get > num)
     {
@@ -56,7 +56,8 @@ int main(int argc, char const *argv[])
 
     dprint("show 30, 10");
 
-    LIST_FOREACH(&list, get)
+    tListObj* obj;
+    LIST_FOREACH(&list, obj, get)
     {
         dprint("get = %ld", *get);
     }
@@ -79,7 +80,7 @@ int main(int argc, char const *argv[])
     list_appendTo(&list, &a, &b);
     list_insertTo(&list, &a, &b);
 
-    LIST_FOREACH(&list, get)
+    LIST_FOREACH(&list, obj, get)
     {
         dprint("get = %ld", *get);
     }

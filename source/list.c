@@ -118,131 +118,113 @@ tListStatus list_remove(tList* list, void* content)
     check_if(content == NULL, return LIST_ERROR, "content is null");
     check_if(_checkList(list) != LIST_OK, return LIST_ERROR, "_checkList failed");
 
-    tListObj* obj = list->head;
-    while (obj)
+    tListObj* obj = list_findObj(list, NULL, content);
+    check_if(obj == NULL, return LIST_ERROR, "content is not in this list");
+
+    if (obj->prev && obj->next) // middle
     {
-        if (obj->content == content)
-        {
-            if (obj->prev && obj->next) // middle
-            {
-                obj->prev->next = obj->next;
-                obj->next->prev = obj->prev;
-            }
-            else if (obj->next) // head
-            {
-                obj->next->prev = NULL;
-                list->head = obj->next;
-            }
-            else if (obj->prev) // tail
-            {
-                obj->prev->next = NULL;
-                list->tail = obj->prev;
-            }
-            else // both tail and head, list num = 1
-            {
-                list->tail = NULL;
-                list->head = NULL;
-            }
-
-            list->num--;
-
-            free(obj);
-            return LIST_OK;
-        }
-        obj = obj->next;
+        obj->prev->next = obj->next;
+        obj->next->prev = obj->prev;
+    }
+    else if (obj->next) // head
+    {
+        obj->next->prev = NULL;
+        list->head = obj->next;
+    }
+    else if (obj->prev) // tail
+    {
+        obj->prev->next = NULL;
+        list->tail = obj->prev;
+    }
+    else // both tail and head, list num = 1
+    {
+        list->tail = NULL;
+        list->head = NULL;
     }
 
-    return LIST_ERROR;
+    list->num--;
+
+    free(obj);
+
+    return LIST_OK;
+}
+
+tListObj* list_headObj(tList* list)
+{
+    check_if(list == NULL, return NULL, "list is null");
+    check_if(_checkList(list) != LIST_OK, return NULL, "_checkList failed");
+
+    return list->head;
 }
 
 void* list_head(tList* list)
 {
+    tListObj* obj = list_headObj(list);
+    return (obj != NULL) ? obj->content : NULL;
+}
+
+tListObj* list_tailObj(tList* list)
+{
     check_if(list == NULL, return NULL, "list is null");
     check_if(_checkList(list) != LIST_OK, return NULL, "_checkList failed");
 
-    if (list->head == NULL) return NULL;
-
-    return list->head->content;
+    return list->tail;
 }
 
 void* list_tail(tList* list)
 {
+    tListObj* obj = list_tailObj(list);
+    return (obj != NULL) ? obj->content : NULL;
+}
+
+tListObj* list_prevObj(tList* list, tListObj* obj)
+{
     check_if(list == NULL, return NULL, "list is null");
+    check_if(obj == NULL, return NULL, "obj is null");
     check_if(_checkList(list) != LIST_OK, return NULL, "_checkList failed");
 
-    if (list->tail == NULL) return NULL;
-
-    return list->tail->content;
+    return obj->prev;
 }
 
 void* list_prev(tList* list, void* content)
 {
+    tListObj* obj = list_findObj(list, NULL, content);
+    check_if(obj == NULL, return NULL, "content is not in this list");
+
+    tListObj* prev_obj = list_prevObj(list, obj);
+    return (prev_obj != NULL) ? prev_obj->content : NULL;
+}
+
+tListObj* list_nextObj(tList* list, tListObj* obj)
+{
     check_if(list == NULL, return NULL, "list is null");
-    check_if(content == NULL, return NULL, "content is null");
+    check_if(obj == NULL, return NULL, "obj is null");
     check_if(_checkList(list) != LIST_OK, return NULL, "_checkList failed");
 
-    tListObj* obj = list->head;
-    void* ret = NULL;
-
-    while (obj)
-    {
-        if (obj->content == content)
-        {
-            tListObj* prev = obj->prev;
-            if (prev)
-            {
-                ret = prev->content;
-            }
-            goto _END;
-        }
-        obj = obj->next;
-    }
-
-_END:
-    return ret;
+    return obj->next;
 }
 
 void* list_next(tList* list, void* content)
 {
-    check_if(list == NULL, return NULL, "list is null");
-    check_if(content == NULL, return NULL, "content is null");
-    check_if(_checkList(list) != LIST_OK, return NULL, "_checkList failed");
+    tListObj* obj = list_findObj(list, NULL, content);
+    check_if(obj == NULL, return NULL, "content is not in this list");
 
-    tListObj* obj = list->head;
-    void* ret = NULL;
-
-    while (obj)
-    {
-        if (obj->content == content)
-        {
-            tListObj* next = obj->next;
-            if (next)
-            {
-                ret = next->content;
-            }
-            goto _END;
-        }
-        obj = obj->next;
-    }
-
-_END:
-    return ret;
+    tListObj* next_obj = list_nextObj(list, obj);
+    return (next_obj != NULL) ? next_obj->content : NULL;
 }
 
-void* list_find(tList* list, tListContentFindFn find_fn, void* arg)
+tListObj* list_findObj(tList* list, tListContentFindFn find_fn, void* arg)
 {
     check_if(list == NULL, return NULL, "list is null");
     check_if(_checkList(list) != LIST_OK, return NULL, "_checkList failed");
 
     tListObj* obj = list->head;
-    void* ret = NULL;
     while (obj)
     {
         if (find_fn)
         {
             if (find_fn(obj->content, arg) == LIST_TRUE)
             {
-                ret = obj->content;
                 goto _END;
             }
         }
@@ -250,7 +232,6 @@ void* list_find(tList* list, tListContentFindFn find_fn, void* arg)
         {
             if (obj->content == arg)
             {
-                ret = obj->content;
                 goto _END;
             }
         }
@@ -259,7 +240,13 @@ void* list_find(tList* list, tListContentFindFn find_fn, void* arg)
     }
 
 _END:
-    return ret;
+    return obj;
+}
+
+void* list_find(tList* list, tListContentFindFn find_fn, void* arg)
+{
+    tListObj* obj = list_findObj(list, find_fn, arg);
+    return (obj != NULL) ? obj->content : NULL;
 }
 
 int  list_length(tList* list)
@@ -270,78 +257,76 @@ int  list_length(tList* list)
     return list->num;
 }
 
-tListStatus list_insertTo(tList* list, void* target, void* content)
+tListStatus list_insertToObj(tList* list, tListObj* target_obj, void* content)
 {
     check_if(list == NULL, return LIST_ERROR, "list is null");
     check_if(content == NULL, return LIST_ERROR, "content is null");
-    check_if(target == NULL, return LIST_ERROR, "target is null");
+    check_if(_checkList(list) != LIST_OK, return LIST_ERROR, "_checkList failed");
+    check_if(target_obj == NULL, return LIST_ERROR, "target_obj is null");
+    check_if(list_find(list, NULL, content) != NULL, return LIST_ERROR, "content is already in list");
+    check_if(list_find(list, NULL, target_obj->content) == NULL, return LIST_ERROR, "target_obj is not in list");
+
+    if (target_obj->prev)
+    {
+        tListObj* newobj = calloc(sizeof(tListObj), 1);
+        newobj->content = content;
+
+        target_obj->prev->next = newobj;
+        newobj->prev = target_obj->prev;
+
+        target_obj->prev = newobj;
+        newobj->next = target_obj;
+        list->num++;
+
+        return LIST_OK;
+    }
+    else // target is head
+    {
+        return list_insert(list, content);
+    }
+}
+
+tListStatus list_insertTo(tList* list, void* target, void* content)
+{
+    tListObj* obj = list_findObj(list, NULL, target);
+    check_if(obj == NULL, return LIST_ERROR, "target is not in this list");
+
+    return list_insertToObj(list, obj, content);
+}
+
+tListStatus list_appendToObj(tList* list, tListObj* target_obj, void* content)
+{
+    check_if(list == NULL, return LIST_ERROR, "list is null");
+    check_if(target_obj == NULL, return LIST_ERROR, "target_obj is null");
+    check_if(content == NULL, return LIST_ERROR, "content is null");
     check_if(_checkList(list) != LIST_OK, return LIST_ERROR, "_checkList failed");
     check_if(list_find(list, NULL, content) != NULL, return LIST_ERROR, "content is already in list");
+    check_if(list_find(list, NULL, target_obj->content) == NULL, return LIST_ERROR, "target_obj is not in list");
 
-    tListObj* obj = list->head;
-    while (obj)
+    if (target_obj->next)
     {
-        if (obj->content == target)
-        {
-            if (obj->prev)
-            {
-                tListObj* newobj = calloc(sizeof(tListObj), 1);
-                newobj->content = content;
+        tListObj* newobj = calloc(sizeof(tListObj), 1);
+        newobj->content = content;
 
-                obj->prev->next = newobj;
-                newobj->prev = obj->prev;
+        target_obj->next->prev = newobj;
+        newobj->next = target_obj->next;
 
-                obj->prev = newobj;
-                newobj->next = obj;
-                list->num++;
+        target_obj->next = newobj;
+        newobj->prev = target_obj;
+        list->num++;
 
-                return LIST_OK;
-            }
-            else // target is head
-            {
-                return list_insert(list, content);
-            }
-        }
-        obj = obj->next;
+        return LIST_OK;
     }
-
-    return LIST_ERROR;
+    else // target is tail
+    {
+        return list_append(list, content);
+    }
 }
 
 tListStatus list_appendTo(tList* list, void* target, void* content)
 {
-    check_if(list == NULL, return LIST_ERROR, "list is null");
-    check_if(content == NULL, return LIST_ERROR, "content is null");
-    check_if(target == NULL, return LIST_ERROR, "target is null");
-    check_if(_checkList(list) != LIST_OK, return LIST_ERROR, "_checkList failed");
-    check_if(list_find(list, NULL, content) != NULL, return LIST_ERROR, "content is already in list");
+    tListObj* obj = list_findObj(list, NULL, target);
+    check_if(obj == NULL, return LIST_ERROR, "target is not in this list");
 
-    tListObj* obj = list->head;
-    while (obj)
-    {
-        if (obj->content == target)
-        {
-            if (obj->next)
-            {
-                tListObj* newobj = calloc(sizeof(tListObj), 1);
-                newobj->content = content;
-
-                obj->next->prev = newobj;
-                newobj->next = obj->next;
-
-                obj->next = newobj;
-                newobj->prev = obj;
-                list->num++;
-
-                return LIST_OK;
-            }
-            else // target is tail
-            {
-                return list_append(list, content);
-            }
-        }
-        obj = obj->next;
-    }
-
-    return LIST_ERROR;
+    return list_appendToObj(list, obj, content);
 }

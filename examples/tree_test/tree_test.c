@@ -76,7 +76,8 @@ int main(int argc, char const *argv[])
     tree_route(&node111, &node3, &route);
     dprint("route from %s to %s:", node111.name, node3.name);
     tTaco* tmp;
-    LIST_FOREACH(&route, tmp)
+    tListObj* obj;
+    LIST_FOREACH(&route, obj, tmp)
     {
         dprint("%s", tmp->name);
     }
@@ -85,7 +86,7 @@ int main(int argc, char const *argv[])
 
     tree_route(&node11, &node12, &route);
     dprint("route from %s to %s:", node11.name, node12.name);
-    LIST_FOREACH(&route, tmp)
+    LIST_FOREACH(&route, obj, tmp)
     {
         dprint("%s", tmp->name);
     }
@@ -94,7 +95,7 @@ int main(int argc, char const *argv[])
 
     tree_route(&node112, &node1, &route);
     dprint("route from %s to %s:", node112.name, node1.name);
-    LIST_FOREACH(&route, tmp)
+    LIST_FOREACH(&route, obj, tmp)
     {
         dprint("%s", tmp->name);
     }
@@ -103,7 +104,7 @@ int main(int argc, char const *argv[])
 
     tree_route(&node1, &node111, &route);
     dprint("route from %s to %s:", node1.name, node111.name);
-    LIST_FOREACH(&route, tmp)
+    LIST_FOREACH(&route, obj, tmp)
     {
         dprint("%s", tmp->name);
     }

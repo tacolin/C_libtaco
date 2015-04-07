@@ -5,7 +5,10 @@
 
 ////////////////////////////////////////////////////////////////////////////////
 
-#define LIST_FOREACH(pList, content) for(content = list_head(pList); content; content = list_next(pList, content))
+#define LIST_FOREACH(pList, _obj, _content) \
+    for (_obj = list_headObj(pList), _content = (_obj) ? _obj->content : NULL; \
+         _obj && _content; \
+         _obj = list_nextObj(pList, _obj), _content = (_obj) ? _obj->content : NULL)
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -68,5 +71,17 @@ void* list_prev(tList* list, void* content);
 void* list_next(tList* list, void* content);
 
 int  list_length(tList* list);
+
+////////////////////////////////////////////////////////////////////////////////
+
+tListObj* list_findObj(tList* list, tListContentFindFn find_fn, void* arg);
+tListObj* list_headObj(tList* list);
+tListObj* list_tailObj(tList* list);
+
+tListObj* list_prevObj(tList* list, tListObj* obj);
+tListObj* list_nextObj(tList* list, tListObj* obj);
+
+tListStatus list_insertToObj(tList* list, tListObj* target_obj, void* content);
+tListStatus list_appendToObj(tList* list, tListObj* target_obj, void* content);
 
 #endif //_LIST_H_

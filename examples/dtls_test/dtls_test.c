@@ -76,6 +76,7 @@ static void _runDtlsServer(int local_port)
     fd_set         readset;
     tList          dtls_list;
     tDtls*         dtls    = NULL;
+    tListObj*      obj;
 
     list_init(&dtls_list, _destroyDtls);
 
@@ -87,7 +88,7 @@ static void _runDtlsServer(int local_port)
         FD_ZERO(&readset);
         FD_SET(_server.fd, &readset);
 
-        LIST_FOREACH(&dtls_list, dtls)
+        LIST_FOREACH(&dtls_list, obj, dtls)
         {
             FD_SET(dtls->fd, &readset);
         }
@@ -99,7 +100,7 @@ static void _runDtlsServer(int local_port)
         }
         else if (sel_ret > 0)
         {
-            LIST_FOREACH(&dtls_list, dtls)
+            LIST_FOREACH(&dtls_list, obj, dtls)
             {
                 if (FD_ISSET(dtls->fd, &readset))
                 {

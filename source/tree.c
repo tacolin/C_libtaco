@@ -45,7 +45,7 @@ tTreeStatus _uninitTreeHdr(void* node)
     check_if(node == NULL, return TREE_ERROR, "node is null");
     tTreeHdr* hdr = (tTreeHdr*)node;
 
-    check_if(hdr->is_init != 1, return TREE_ERROR, "node is not init yet");    
+    check_if(hdr->is_init != 1, return TREE_ERROR, "node is not init yet");
     check_if(hdr->guard_code != TREE_GURAD_CODE, return TREE_ERROR, "guard code is error");
 
     list_clean(&hdr->childs);
@@ -54,7 +54,7 @@ tTreeStatus _uninitTreeHdr(void* node)
     hdr->guard_code = 0;
     hdr->is_init    = 0;
 
-    return TREE_OK;    
+    return TREE_OK;
 }
 
 static tTreeStatus _printNode(void* node, tTreeNodePrintFunc print_fn)
@@ -71,8 +71,9 @@ static tTreeStatus _printNode(void* node, tTreeNodePrintFunc print_fn)
     layer++;
 
     tTreeHdr* hdr = (tTreeHdr*)node;
+    tListObj* obj;
     void* child;
-    LIST_FOREACH(&hdr->childs, child)
+    LIST_FOREACH(&hdr->childs, obj, child)
     {
         _printNode(child, print_fn);
     }
@@ -111,7 +112,8 @@ tTreeStatus tree_clean(tTree* tree)
     check_if(tree->is_init != 1, return TREE_ERROR, "tree is not init yet");
 
     void* node;
-    LIST_FOREACH(&tree->nodes, node)
+    tListObj* obj;
+    LIST_FOREACH(&tree->nodes, obj, node)
     {
         _uninitTreeHdr(node);
     }
@@ -165,11 +167,11 @@ tTreeStatus tree_remove(void* parent, void* child)
 
     list_ret = list_remove(&parent_hdr->childs, child);
     check_if(list_ret != LIST_OK, return TREE_ERROR, "child is not born by parent");
-    
+
     list_ret = list_remove(&tree->nodes, child);
     check_if(list_ret != LIST_OK, return TREE_ERROR, "child is not in this tree");
 
-    return _uninitTreeHdr(child);    
+    return _uninitTreeHdr(child);
 }
 
 tTreeStatus tree_isLeaf(void* node)
@@ -178,7 +180,7 @@ tTreeStatus tree_isLeaf(void* node)
     check_if(_isNodeClean(node) == TREE_OK, return TREE_ERROR, "node is not added to any tree");
 
     tTreeHdr* hdr = (tTreeHdr*)node;
-    
+
     if (hdr->parent == NULL) return TREE_ERROR; // root
     if (list_length(&hdr->childs) > 0) return TREE_ERROR; // node has children
 
