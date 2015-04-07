@@ -26,7 +26,7 @@ int main(int argc, char const *argv[])
     memset(_tabs, ' ', 100);
 
     tTaco root = {.name = "root"};
-    tree_init(&tree, &root, NULL, _printTaco);
+    tree_init(&tree, &root, NULL);
 
     // root
     // +-- node1
@@ -62,7 +62,7 @@ int main(int argc, char const *argv[])
 
     tree_add(&node1, &node3); // fail , print error message
 
-    tree_print(&tree);
+    tree_dfs(&tree, _printTaco);
 
     tTaco* ancestor = tree_commonAncestor(&node21, &node111);
     dprint("common ancestor of %s and %s : %s", node21.name, node111.name, ancestor->name);
@@ -124,7 +124,7 @@ int main(int argc, char const *argv[])
     tree_remove(&root, &node2);
     tree_remove(&root, &node3);
 
-    tree_print(&tree);
+    tree_dfs(&tree, _printTaco);
 
     tree_clean(&tree);
     return 0;

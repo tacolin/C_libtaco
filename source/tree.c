@@ -8,6 +8,31 @@
 
 ////////////////////////////////////////////////////////////////////////////////
 
+static tTreeStatus _dfs(void* node, tTreeNodeExecFunc exec_fn)
+{
+    check_if(node == NULL, return TREE_ERROR, "node is null");
+    check_if(exec_fn == NULL, return TREE_ERROR, "exec_fn is null");
+
+    static __thread int layer = 0;
+
+    if (exec_fn)
+    {
+        exec_fn(node, layer);
+    }
+    layer++;
+
+    tTreeHdr* hdr = (tTreeHdr*)node;
+    tListObj* obj;
+    void* child;
+    LIST_FOREACH(&hdr->childs, obj, child)
+    {
+        _dfs(child, exec_fn);
+    }
+    layer--;
+
+    return TREE_OK;
+}
+
 static tTreeStatus _isNodeClean(void* node)
 {
     check_if(node == NULL, return TREE_ERROR, "node is null");
@@ -57,34 +82,9 @@ tTreeStatus _uninitTreeHdr(void* node)
     return TREE_OK;
 }
 
-static tTreeStatus _printNode(void* node, tTreeNodePrintFunc print_fn)
-{
-    check_if(node == NULL, return TREE_ERROR, "node is null");
-    check_if(print_fn == NULL, return TREE_ERROR, "print_fn is null");
-
-    static int layer = 0;
-
-    if (print_fn)
-    {
-        print_fn(node, layer);
-    }
-    layer++;
-
-    tTreeHdr* hdr = (tTreeHdr*)node;
-    tListObj* obj;
-    void* child;
-    LIST_FOREACH(&hdr->childs, obj, child)
-    {
-        _printNode(child, print_fn);
-    }
-    layer--;
-
-    return;
-}
-
 ////////////////////////////////////////////////////////////////////////////////
 
-tTreeStatus tree_init(tTree* tree, void* root, tTreeNodeCleanFunc clean_fn, tTreeNodePrintFunc print_fn)
+tTreeStatus tree_init(tTree* tree, void* root, tTreeNodeCleanFunc clean_fn)
 {
     check_if(tree == NULL, return TREE_ERROR, "tree is null");
     check_if(root == NULL, return TREE_ERROR, "root is null");
@@ -100,7 +100,6 @@ tTreeStatus tree_init(tTree* tree, void* root, tTreeNodeCleanFunc clean_fn, tTre
     list_ret = list_append(&tree->nodes, root);
     check_if(list_ret != LIST_OK, return TREE_ERROR, "list_append root failed");
 
-    tree->print_fn = print_fn;
     tree->is_init  = 1;
 
     return TREE_OK;
@@ -278,14 +277,14 @@ _ERROR:
     return TREE_ERROR;
 }
 
-tTreeStatus tree_print(tTree* tree)
+tTreeStatus tree_dfs(tTree* tree, tTreeNodeExecFunc exec_fn)
 {
     check_if(tree == NULL, return TREE_ERROR, "tree is null");
+    check_if(exec_fn == NULL, return TREE_ERROR, "exec_fn is null");
     check_if(tree->is_init != 1, return TREE_ERROR, "tree is not init yet");
-    check_if(tree->print_fn == NULL, return TREE_ERROR, "print_fn is null");
 
     void* root = list_head(&tree->nodes);
     check_if(root == NULL, return TREE_ERROR, "tree is empty");
 
-    return _printNode(root, tree->print_fn);
+    return _dfs(root, exec_fn);
 }

@@ -10,24 +10,23 @@
 
 ////////////////////////////////////////////////////////////////////////////////
 
-typedef enum 
+typedef enum
 {
     TREE_OK = 0,
     TREE_ERROR = -1
 
 } tTreeStatus;
 
-typedef void (*tTreeNodePrintFunc)(void* node, int layer);
+typedef void (*tTreeNodeExecFunc)(void* node, int layer);
 
-typedef struct tTree 
+typedef struct tTree
 {
     int                is_init;
     tList              nodes;
-    tTreeNodePrintFunc print_fn;
 
 } tTree;
 
-typedef struct tTreeHdr 
+typedef struct tTreeHdr
 {
     int guard_code;
     int is_init;
@@ -42,7 +41,7 @@ typedef struct tTreeHdr
 
 ////////////////////////////////////////////////////////////////////////////////
 
-tTreeStatus tree_init(tTree* tree, void* root, tTreeNodeCleanFunc clean_fn, tTreeNodePrintFunc print_fn);
+tTreeStatus tree_init(tTree* tree, void* root, tTreeNodeCleanFunc clean_fn);
 tTreeStatus tree_clean(tTree* tree);
 
 tTreeStatus tree_add(void* parent, void* child);
@@ -52,8 +51,8 @@ tTreeStatus tree_isLeaf(void* node);
 
 tTreeStatus tree_isAncestor(void* descendant, void* ancestor);
 void* tree_commonAncestor(void* node1, void* node2);
-tTreeStatus tree_print(tTree* tree);
 
 tTreeStatus tree_route(void* src, void* dst, tList* route);
+tTreeStatus tree_dfs(tTree* tree, tTreeNodeExecFunc exec_fn);
 
 #endif //_TREE_H_
