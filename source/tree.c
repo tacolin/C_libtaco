@@ -13,22 +13,19 @@ static tTreeStatus _dfs(void* node, tTreeNodeExecFunc exec_fn)
     check_if(node == NULL, return TREE_ERROR, "node is null");
     check_if(exec_fn == NULL, return TREE_ERROR, "exec_fn is null");
 
-    static __thread int layer = 0;
+    tTreeHdr* hdr = (tTreeHdr*)node;
 
     if (exec_fn)
     {
-        exec_fn(node, layer);
+        exec_fn(node, hdr->layer);
     }
-    layer++;
 
-    tTreeHdr* hdr = (tTreeHdr*)node;
     tListObj* obj;
     void* child;
     LIST_FOREACH(&hdr->childs, obj, child)
     {
         _dfs(child, exec_fn);
     }
-    layer--;
 
     return TREE_OK;
 }
@@ -59,6 +56,7 @@ tTreeStatus _initTreeHdr(void* node, void* parent, tTree* tree)
 
     list_init(&hdr->childs, NULL);
 
+    hdr->layer      = 0;
     hdr->guard_code = TREE_GURAD_CODE;
     hdr->is_init    = 1;
 
@@ -78,8 +76,20 @@ tTreeStatus _uninitTreeHdr(void* node)
     hdr->parent     = NULL;
     hdr->guard_code = 0;
     hdr->is_init    = 0;
+    hdr->layer      = 0;
 
     return TREE_OK;
+}
+
+static tListBool _isLayerBiggerThanMe(void* target, void* me)
+{
+    check_if(target == NULL, return LIST_FALSE, "target is null");
+    check_if(me == NULL, return LIST_FALSE, "me is null");
+
+    tTreeHdr* node = (tTreeHdr*)target;
+    tTreeHdr* mynode = (tTreeHdr*)me;
+
+    return (node->layer > mynode->layer) ? LIST_TRUE : LIST_FALSE;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -137,11 +147,32 @@ tTreeStatus tree_add(void* parent, void* child)
     tTreeStatus ret = _initTreeHdr(child, parent, tree);
     check_if(ret != TREE_OK, return TREE_ERROR, "_initTreeHdr failed");
 
+    tTreeHdr* child_hdr  = (tTreeHdr*)child;
+    child_hdr->layer = parent_hdr->layer + 1;
+
     tListStatus list_ret = list_append(&parent_hdr->childs, child);
     check_if(list_ret != LIST_OK, goto _ERROR, "list_append to parent failed");
 
-    list_ret = list_append(&tree->nodes, child);
-    check_if(list_ret != LIST_OK, goto _ERROR, "list_append to tree failed");
+    tListObj* target_obj = list_findObj(&tree->nodes, _isLayerBiggerThanMe, child);
+    if (target_obj == NULL)
+    {
+        target_obj = list_tailObj(&tree->nodes);
+        if (target_obj == NULL)
+        {
+            list_ret = list_append(&tree->nodes, child);
+            check_if(list_ret != LIST_OK, goto _ERROR, "list_append to tree failed");
+        }
+        else
+        {
+            list_ret = list_appendToObj(&tree->nodes, target_obj, child);
+            check_if(list_ret != LIST_OK, goto _ERROR, "list_appendTo failed");
+        }
+    }
+    else
+    {
+        list_ret = list_insertToObj(&tree->nodes, target_obj, child);
+        check_if(list_ret != LIST_OK, goto _ERROR, "list_insertTo failed");
+    }
 
     return TREE_OK;
 
@@ -287,4 +318,20 @@ tTreeStatus tree_dfs(tTree* tree, tTreeNodeExecFunc exec_fn)
     check_if(root == NULL, return TREE_ERROR, "tree is empty");
 
     return _dfs(root, exec_fn);
+}
+
+tTreeStatus tree_bfs(tTree* tree, tTreeNodeExecFunc exec_fn)
+{
+    check_if(tree == NULL, return TREE_ERROR, "tree is null");
+    check_if(exec_fn == NULL, return TREE_ERROR, "exec_fn is null");
+    check_if(tree->is_init != 1, return TREE_ERROR, "tree is not init yet");
+
+    void* node;
+    tListObj* obj;
+    LIST_FOREACH(&tree->nodes, obj, node)
+    {
+        exec_fn(node, ((tTreeHdr*)node)->layer);
+    }
+
+    return TREE_OK;
 }

@@ -21,8 +21,8 @@ typedef void (*tTreeNodeExecFunc)(void* node, int layer);
 
 typedef struct tTree
 {
-    int                is_init;
-    tList              nodes;
+    int   is_init;
+    tList nodes;  // bfs list
 
 } tTree;
 
@@ -34,6 +34,7 @@ typedef struct tTreeHdr
     struct tTreeHdr* parent;
     tList            childs;
 
+    int layer;
     tTree* tree;
 
 } tTreeHdr;
@@ -53,6 +54,8 @@ tTreeStatus tree_isAncestor(void* descendant, void* ancestor);
 void* tree_commonAncestor(void* node1, void* node2);
 
 tTreeStatus tree_route(void* src, void* dst, tList* route);
+
 tTreeStatus tree_dfs(tTree* tree, tTreeNodeExecFunc exec_fn);
+tTreeStatus tree_bfs(tTree* tree, tTreeNodeExecFunc exec_fn);
 
 #endif //_TREE_H_

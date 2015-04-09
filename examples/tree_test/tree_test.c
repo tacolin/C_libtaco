@@ -39,30 +39,34 @@ int main(int argc, char const *argv[])
     // +-- node3
 
     tTaco node1 = {.name = "node1"};
-    tTaco node2 = {.name = "node2"};
-    tTaco node3 = {.name = "node3"};
-
-    tree_add(&root, &node1);
-    tree_add(&root, &node2);
-    tree_add(&root, &node3);
-
     tTaco node11 = {.name = "node11"};
     tTaco node12 = {.name = "node12"};
-    tTaco node21 = {.name = "node21"};
 
+    tree_add(&root, &node1);
     tree_add(&node1, &node11);
     tree_add(&node1, &node12);
+
+    tTaco node2 = {.name = "node2"};
+    tTaco node21 = {.name = "node21"};
+
+    tree_add(&root, &node2);
     tree_add(&node2, &node21);
 
+    tTaco node3 = {.name = "node3"};
     tTaco node111 = {.name = "node111"};
     tTaco node112 = {.name = "node112"};
 
+    tree_add(&root, &node3);
     tree_add(&node11, &node111);
     tree_add(&node11, &node112);
 
     tree_add(&node1, &node3); // fail , print error message
 
     tree_dfs(&tree, _printTaco);
+
+    dprint("");
+
+    tree_bfs(&tree, _printTaco);
 
     tTaco* ancestor = tree_commonAncestor(&node21, &node111);
     dprint("common ancestor of %s and %s : %s", node21.name, node111.name, ancestor->name);
