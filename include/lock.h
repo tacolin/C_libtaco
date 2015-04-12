@@ -8,6 +8,8 @@
 
 typedef pthread_mutex_t tLock;
 
+typedef pthread_rwlock_t tRwlock;
+
 typedef enum
 {
     LOCK_OK = 0,
@@ -17,31 +19,24 @@ typedef enum
 
 ////////////////////////////////////////////////////////////////////////////////
 
-static inline tLockStatus lock_init(tLock *lock)
-{
-    check_if(lock == NULL, return LOCK_ERROR, "lock is null");
-    int ret = pthread_mutex_init(lock, NULL);
-    return (ret == 0) ? LOCK_OK : LOCK_ERROR;
-}
+tLockStatus lock_init(tLock *lock);
+tLockStatus lock_uninit(tLock *lock);
 
-static inline void lock_uninit(tLock *lock)
-{
-    check_if(lock == NULL, return, "lock is null");
-    return;
-}
+tLockStatus lock_enter(tLock *lock);
+tLockStatus lock_exit(tLock* lock);
 
-static inline tLockStatus lock_enter(tLock *lock)
-{
-    check_if(lock == NULL, return LOCK_ERROR, "lock is null");
-    int ret = pthread_mutex_lock(lock);
-    return (ret == 0) ? LOCK_OK : LOCK_ERROR;
-}
+tLockStatus lock_try(tLock* lock);
 
-static inline void lock_exit(tLock* lock)
-{
-    check_if(lock == NULL, return, "lock is null");
-    pthread_mutex_unlock(lock);
-    return;
-}
+////////////////////////////////////////////////////////////////////////////////
+
+tLockStatus rwlock_init(tRwlock *lock);
+tLockStatus rwlock_uninit(tRwlock* lock);
+
+tLockStatus rwlock_enterRead(tRwlock* lock);
+tLockStatus rwlock_enterWrite(tRwlock* lock);
+tLockStatus rwlock_exit(tRwlock* lock);
+
+tLockStatus rwlock_tryRead(tRwlock* lock);
+tLockStatus rwlock_tryWrite(tRwlock* lock);
 
 #endif //_LOCK_H_
