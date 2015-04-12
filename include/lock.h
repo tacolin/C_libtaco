@@ -33,10 +33,11 @@ tLockStatus rwlock_init(tRwlock *lock);
 tLockStatus rwlock_uninit(tRwlock* lock);
 
 tLockStatus rwlock_enterRead(tRwlock* lock);
-tLockStatus rwlock_enterWrite(tRwlock* lock);
-tLockStatus rwlock_exit(tRwlock* lock);
-
+tLockStatus rwlock_exitRead(tRwlock* lock);
 tLockStatus rwlock_tryRead(tRwlock* lock);
+
+tLockStatus rwlock_enterWrite(tRwlock* lock);
+tLockStatus rwlock_exitWrite(tRwlock* lock);
 tLockStatus rwlock_tryWrite(tRwlock* lock);
 
 #endif //_LOCK_H_

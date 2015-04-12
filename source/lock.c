@@ -81,17 +81,7 @@ tLockStatus rwlock_enterRead(tRwlock* lock)
     return LOCK_OK;
 }
 
-tLockStatus rwlock_enterWrite(tRwlock* lock)
-{
-    check_if(lock == NULL, return LOCK_ERROR, "lock is null");
-
-    int ret = pthread_rwlock_wrlock(lock);
-    check_if(ret != 0, return LOCK_ERROR, "pthread_rwlock_wrlock failed, ret = %d", ret);
-
-    return LOCK_OK;
-}
-
-tLockStatus rwlock_exit(tRwlock* lock)
+tLockStatus rwlock_exitRead(tRwlock* lock)
 {
     check_if(lock == NULL, return LOCK_ERROR, "lock is null");
 
@@ -106,6 +96,26 @@ tLockStatus rwlock_tryRead(tRwlock* lock)
     check_if(lock == NULL, return LOCK_ERROR, "lock is null");
     int ret = pthread_rwlock_tryrdlock(lock);
     return (ret == 0) ? LOCK_OK : LOCK_ERROR;
+}
+
+tLockStatus rwlock_enterWrite(tRwlock* lock)
+{
+    check_if(lock == NULL, return LOCK_ERROR, "lock is null");
+
+    int ret = pthread_rwlock_wrlock(lock);
+    check_if(ret != 0, return LOCK_ERROR, "pthread_rwlock_wrlock failed, ret = %d", ret);
+
+    return LOCK_OK;
+}
+
+tLockStatus rwlock_exitWrite(tRwlock* lock)
+{
+    check_if(lock == NULL, return LOCK_ERROR, "lock is null");
+
+    int ret = pthread_rwlock_unlock(lock);
+    check_if(ret != 0, return LOCK_ERROR, "pthread_rwlock_unlock failed, ret = %d", ret);
+
+    return LOCK_OK;
 }
 
 tLockStatus rwlock_tryWrite(tRwlock* lock)
