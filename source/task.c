@@ -70,9 +70,12 @@ static void* _taskMainFunc(void* input)
 static void _taskCleanFunc(void* arg)
 {
     tTask* task = (tTask*)arg;
+
     check_if(task == NULL, return, "task is null");
 
-    task_stop(task);
+    task->stop_flag = 1;
+    pthread_cancel(task->thread);
+    pthread_join(task->thread, NULL);
 
     dprint("please stop task (%s) before uninit task system", task->name);
 
