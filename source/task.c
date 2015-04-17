@@ -9,14 +9,8 @@
 static tList _task_list;
 static pthread_mutex_t _task_lock;
 static int   _system_init_flag = 0;
-static tTask _dummy_task;
 
 ////////////////////////////////////////////////////////////////////////////////
-
-static void _dummyRoutine(void* task, void* arg)
-{
-    return;
-}
 
 static void _msleep(int ms)
 {
@@ -178,17 +172,12 @@ tTaskStatus task_system_init(void)
 
     _system_init_flag = 1;
 
-    task_init(&_dummy_task, "DUMMY", _dummyRoutine, NULL, TASK_LOW, TASK_ONESHOT);
-    task_start(&_dummy_task);
-
     return TASK_OK;
 }
 
 tTaskStatus task_system_uninit(void)
 {
     check_if(_system_init_flag == 0, return TASK_ERROR, "system is not initialized yet");
-
-    task_stop(&_dummy_task);
 
     int num = list_length(&_task_list);
 
