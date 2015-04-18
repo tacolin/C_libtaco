@@ -10,13 +10,43 @@ static void _cleanEv(void* content)
     check_if(ev == NULL, return, "content is null");
     check_if(ev->loop == NULL, return, "ev->loop is null");
 
-    struct epoll_event tmp = {};
-    epoll_ctl(ev->loop->epfd, EPOLL_CTL_DEL, ev->fd, &tmp);
-
-    if (ev->type != EV_IO)
+    if (ev->type == EV_TIMER)
     {
-        close(ev->fd);
-        ev->fd = -1;
+        tEvTimer* tm = (tEvTimer*)ev;
+
+        memset(&tm->rest_time, 0, sizeof(struct itimerspec));
+        timerfd_settime(tm->fd, 0, &tm->rest_time, NULL);
+
+        struct epoll_event tmp = {};
+        epoll_ctl(tm->loop->epfd, EPOLL_CTL_DEL, tm->fd, &tmp);
+
+        close(tm->fd);
+        tm->fd = -1;
+    }
+    else if (ev->type == EV_ONCE)
+    {
+        tEvOnce* once = (tEvOnce*)ev;
+
+        struct epoll_event tmp = {};
+        epoll_ctl(once->loop->epfd, EPOLL_CTL_DEL, once->fd, &tmp);
+
+        close(once->fd);
+        free(once);
+    }
+    else if (ev->type == EV_SIGNAL)
+    {
+        tEvSignal* sig = (tEvTimer*)ev;
+
+        sigset_t mask;
+        sigemptyset(&mask);
+        sigaddset(&mask, sig->signum);
+        sigprocmask(SIG_UNBLOCK, &mask, NULL);
+
+        struct epoll_event tmpev = {};
+        epoll_ctl(sig->loop->epfd, EPOLL_CTL_DEL, sig->fd, &tmpev);
+
+        close(sig->fd);
+        sig->fd = -1;
     }
 
     return;
@@ -232,10 +262,10 @@ tEvStatus evloop_uninit(tEvLoop* loop)
         evloop_break(loop);
     }
 
-    loop->is_init = 0;
-
     list_clean(&loop->evlist);
     queue_clean(&loop->inter_thread_queue);
+
+    loop->is_init = 0;
 
     close(loop->epfd);
     loop->epfd = -1;
@@ -693,9 +723,11 @@ tEvStatus evtm_stop(tEvLoop* loop, tEvTimer* tm)
         return _saveInterThreadAction(loop, tm, EV_TIMER_STOP);
     }
 
+    tm->is_started = 0;
+
     // stop the timerfd in linux
     memset(&tm->rest_time, 0, sizeof(struct itimerspec));
-    timerfd_settime(tm->fd, 0, &tm->rest_time, NULL);
+    int set_chk = timerfd_settime(tm->fd, 0, &tm->rest_time, NULL);
 
     struct epoll_event tmp = {};
     int ep_chk = epoll_ctl(tm->loop->epfd, EPOLL_CTL_DEL, tm->fd, &tmp);
@@ -705,6 +737,7 @@ tEvStatus evtm_stop(tEvLoop* loop, tEvTimer* tm)
     close(tm->fd);
     tm->fd = -1;
 
+    check_if(set_chk < 0, return EV_ERROR, "timerfd_settime failed");
     check_if(ep_chk < 0, return EV_ERROR, "epoll_ctl EPOLL_CTL_DEL failed");
     check_if(list_ret != LIST_OK, return EV_ERROR, "list_remove failed");
 
@@ -728,6 +761,8 @@ tEvStatus evtm_pause(tEvLoop* loop, tEvTimer* tm)
     struct itimerspec tmp = {};
     int get_chk = timerfd_gettime(tm->fd, &tmp);
     check_if(get_chk < 0, return EV_ERROR, "timerfd_gettime failed");
+
+    dprint("sec = %ld, nsec = %ld", tmp.it_value.tv_sec, tmp.it_value.tv_nsec);
 
     tEvStatus ret = evtm_stop(loop, tm);
     check_if(ret < 0, return EV_ERROR, "evtm_stop failed");
