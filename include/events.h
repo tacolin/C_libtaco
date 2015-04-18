@@ -75,6 +75,7 @@ typedef struct tEvLoop
 {
     tList evlist;
 
+    int queue_fd;
     tQueue inter_thread_queue;
 
     int epfd;

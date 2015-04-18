@@ -52,10 +52,14 @@ static void _cleanEv(void* content)
     return;
 }
 
-static void _handleInterThreadEv(tEvLoop* loop)
+static void _handleInterThreadEv(tEvLoop* loop, tEv* input_ev, void* arg)
 {
     check_if(loop == NULL, return, "loop is null");
+    check_if(input_ev == NULL, return, "ev is null");
     check_if(loop->is_init != 1, return, "loop is not init yet");
+
+    eventfd_t val;
+    eventfd_read(input_ev->fd, &val);
 
     tEv* ev;
     while ((ev = queue_get(&loop->inter_thread_queue)) && loop->is_running)
@@ -98,6 +102,7 @@ static void _handleInterThreadEv(tEvLoop* loop)
             {
                 ev_once(loop, ev->callback, ev->arg);
                 free(ev);
+                continue;
             }
             else
             {
@@ -218,6 +223,9 @@ static tEvStatus _saveInterThreadAction(tEvLoop* loop, tEv* ev, tEvAction action
     tQueueStatus ret = queue_put(&loop->inter_thread_queue, ev);
     check_if(ret != QUEUE_OK, return EV_ERROR, "queue_put failed");
 
+    eventfd_t val = loop->queue_fd;
+    eventfd_write(loop->queue_fd, val);
+
     return EV_OK;
 }
 
@@ -287,10 +295,18 @@ tEvStatus evloop_run(tEvLoop* loop)
     loop->is_still_running = 1;
     loop->tid = pthread_self();
 
-    _handleInterThreadEv(loop);
-
     struct epoll_event evbuf[loop->max_ev_num];
     memset(evbuf, 0, sizeof(struct epoll_event) * loop->max_ev_num);
+
+    loop->queue_fd = eventfd(0, 0);
+    check_if(loop->queue_fd < 0, return EV_ERROR, "eventfd failed");
+
+    tEvIo io = {};
+    evio_init(&io, _handleInterThreadEv, loop->queue_fd, NULL);
+    evio_start(loop, &io);
+
+    eventfd_t val = loop->queue_fd;
+    eventfd_write(loop->queue_fd, val);
 
     int i;
     int ev_num;
@@ -310,15 +326,19 @@ tEvStatus evloop_run(tEvLoop* loop)
                 _handleEv(loop, ev);
             }
         }
-
-        _handleInterThreadEv(loop);
     }
 
+    evio_stop(loop, &io);
+    close(loop->queue_fd);
+    loop->queue_fd = -1;
     loop->is_still_running = 0;
     loop->tid = 0;
     return EV_OK;
 
 _ERROR:
+    evio_stop(loop, &io);
+    close(loop->queue_fd);
+    loop->queue_fd = -1;
     loop->is_still_running = 0;
     loop->tid = 0;
     return EV_ERROR;
@@ -343,6 +363,11 @@ tEvStatus evloop_break(tEvLoop* loop)
             timeout.tv_usec = (EV_TICK_MS % 1000) * 1000;
             select(0, NULL, NULL, NULL, &timeout);
         }
+
+        // for safety
+        timeout.tv_sec  = EV_TICK_MS / 1000;
+        timeout.tv_usec = (EV_TICK_MS % 1000) * 1000;
+        select(0, NULL, NULL, NULL, &timeout);
     }
 
     return EV_OK;

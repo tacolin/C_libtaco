@@ -34,11 +34,14 @@ static void* _taskMainFunc(void* input)
     tTask* task = (tTask*)input;
     check_if(task == NULL, return, "task is null");
 
+    task->is_stopped = 0;
+
     sem_post(&(task->stop_sem));
     pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, NULL);
     if (task->type == TASK_ONESHOT)
     {
         task->routine_fn(task, task->arg);
+        task->is_stopped = 1;
         pthread_exit(NULL);
     }
     else
@@ -48,6 +51,7 @@ static void* _taskMainFunc(void* input)
             if (task->stop_flag == 1)
             {
                 pthread_testcancel();
+                task->is_stopped = 1;
                 pthread_exit(NULL);
                 break;
             }
@@ -58,6 +62,7 @@ static void* _taskMainFunc(void* input)
             if (task->type == TASK_PREEMPTIVE) _msleep(1); // sleep 1 ms
         }
     }
+
     return NULL;
 }
 
@@ -155,6 +160,13 @@ void task_stop(tTask* task)
     check_if(list_ret != LIST_OK, return, "remove task (%s) from running list failed", task->name);
 
     task->stop_flag = 1;
+
+    // for safety
+    while (task->is_stopped != 1)
+    {
+        _msleep(1);
+    }
+
     pthread_cancel(task->thread);
     pthread_join(task->thread, NULL);
 

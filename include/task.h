@@ -56,6 +56,7 @@ typedef struct tTask
 
     sem_t stop_sem;
     int stop_flag;
+    int is_stopped;
 
 } tTask;
 

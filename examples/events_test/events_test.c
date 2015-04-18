@@ -136,10 +136,10 @@ static void _processStdin(tEvLoop* loop, tEv* ev, void* arg)
     }
     else if (strcmp(buf, "evonce") == 0)
     {
+        dtrace();
         long i = 0;
         for (i=0; i<10; i++)
         {
-            dtrace();
             ev_once(&_loopNew, _onceCallback, (void*)i);
         }
     }
