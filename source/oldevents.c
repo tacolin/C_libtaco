@@ -644,7 +644,7 @@ tOevStatus oevloop_break(tOevLoop* loop)
 
 ////////////////////////////////////////////////////////////////////////////////
 
-tOevStatus oevio_init(struct tOevIo* io, int fd, tOevCallback callback, void* arg)
+tOevStatus oevio_init(struct tOevIo* io, tOevCallback callback, int fd, void* arg)
 {
     check_if(io == NULL, return OEV_ERROR, "io is null");
     check_if(fd < 0, return OEV_ERROR, "fd = %d invalid", fd);

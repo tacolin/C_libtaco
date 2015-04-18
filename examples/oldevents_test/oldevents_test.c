@@ -23,37 +23,37 @@ static void _runLoopNew(void* task, void* arg)
     return;
 }
 
-static int _timer1Expired(tOevLoop* loop, void* ev, void* arg)
+static void _timer1Expired(tOevLoop* loop, void* ev, void* arg)
 {
     dtrace();
     dprint("_timer1Expired");
-    return 0;
+    return;
 }
 
-static int _timer2Expired(tOevLoop* loop, void* ev, void* arg)
+static void _timer2Expired(tOevLoop* loop, void* ev, void* arg)
 {
     dtrace();
     dprint("_timer2Expired");
-    return 0;
+    return;
 }
 
-static int _onceCallback(tOevLoop* loop, void* ev, void* arg)
+static void _onceCallback(tOevLoop* loop, void* ev, void* arg)
 {
     dtrace();
     long i = (long)arg;
     dprint("i = %ld", i);
-    return 0;
+    return;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 
-static int _processStdin(tOevLoop* loop, void* ev, void* arg)
+static void _processStdin(tOevLoop* loop, void* ev, void* arg)
 {
     tOevIo* io = (tOevIo*)ev;
 
     char buf[256] = {0};
     int  readlen = read(io->fd, buf, 256);
-    check_if(readlen <= 0, return -1, "read failed");
+    check_if(readlen <= 0, return, "read failed");
 
     buf[readlen-1] = (buf[readlen-1] == '\n') ? '\0' : buf[readlen-1];
 
@@ -110,7 +110,7 @@ static int _processStdin(tOevLoop* loop, void* ev, void* arg)
         dprint("[taco] %s", buf);
     }
 
-    return 0;
+    return;
 }
 
 int main(int argc, char const *argv[])
@@ -124,7 +124,7 @@ int main(int argc, char const *argv[])
 
     oevloop_init(&loop);
 
-    oevio_init(&io, 0, _processStdin, NULL);
+    oevio_init(&io, _processStdin, 0, NULL);
     oevio_start(&loop, &io);
 
     oevloop_run(&loop);

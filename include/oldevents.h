@@ -57,7 +57,7 @@ typedef enum
 
 struct tOevLoop;
 
-typedef int (*tOevCallback)(struct tOevLoop* loop, void* ev, void* arg);
+typedef void (*tOevCallback)(struct tOevLoop* loop, void* ev, void* arg);
 
 typedef struct tOevQueueObj
 {
@@ -155,7 +155,7 @@ tOevStatus oevloop_break(tOevLoop* loop);
 
 ////////////////////////////////////////////////////////////////////////////////
 
-tOevStatus oevio_init(tOevIo* io, int fd, tOevCallback callback, void* arg);
+tOevStatus oevio_init(tOevIo* io, tOevCallback callback, int fd, void* arg);
 tOevStatus oevio_start(tOevLoop* loop, tOevIo* io);
 tOevStatus oevio_stop(tOevLoop* loop, tOevIo* io);
 

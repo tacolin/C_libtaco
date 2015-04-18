@@ -1,69 +1,137 @@
 #include "basic.h"
 #include "events.h"
+#include "task.h"
 
-static void _sigIntCb(tEvLoop* loop, tEvSignal* sig, void* arg)
+static tTask _taskNew;
+static tEvLoop _loopNew;
+
+static tEvTimer _timer1;
+static tEvTimer _timer2;
+
+static void _runLoopNew(void* task, void* arg)
 {
-    dprint("SIG INT CB called - break loop");
-    evloop_break(loop);
-}
+    tEvLoop* loop = (tEvLoop*)arg;
 
-static void _stdinCb(tEvLoop* loop, tEvIo* io, void* arg)
-{
-    static char buf[256] = {0};
-    int readlen = read(io->fd, buf, 256);
-    check_if(readlen <= 0, return, "readlen = %d", readlen);
-    buf[readlen] = '\0';
+    evloop_init(loop, 1000);
 
-    dprint("read from stdin : %s", buf);
+    evloop_run(loop);
+
+    evloop_uninit(loop);
+
     return;
 }
 
-static void _onceCb(tEvLoop* loop, void* arg)
+static void _timer1Expired(tEvLoop* loop, tEv* ev, void* arg)
 {
-    dprint("recv ev once, data = %ld", (long)arg);
+    dtrace();
+    dprint("_timer1Expired");
+    return;
 }
 
-static void _tm1Cb(tEvLoop* loop, tEvTimer* tm, void* arg)
+static void _timer2Expired(tEvLoop* loop, tEv* ev, void* arg)
 {
-    dprint("TIMEOUT 1 - send 100 ev once to loop");
-    long i;
-    for (i=0; i<100; i++)
+    dtrace();
+    dprint("_timer2Expired");
+    return;
+}
+
+static void _onceCallback(tEvLoop* loop, tEv* ev, void* arg)
+{
+    dtrace();
+    long i = (long)arg;
+    dprint("i = %ld", i);
+    return;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+static void _processStdin(tEvLoop* loop, tEv* ev, void* arg)
+{
+    tEvIo* io = (tEvIo*)ev;
+
+    char buf[256] = {0};
+    int  readlen = read(io->fd, buf, 256);
+    check_if(readlen <= 0, return, "read failed");
+
+    buf[readlen-1] = (buf[readlen-1] == '\n') ? '\0' : buf[readlen-1];
+
+    if (strcmp(buf, "exit") == 0)
     {
-        ev_once(loop, _onceCb, (void*)i);
+        evloop_break(loop);
     }
-}
+    else if (strcmp(buf, "start new loop") == 0)
+    {
+        task_init(&_taskNew, "TASK NEW", _runLoopNew, &_loopNew, TASK_NORMAL, TASK_ONESHOT);
+        task_start(&_taskNew);
+    }
+    else if (strcmp(buf, "stop new loop") == 0)
+    {
+        // evloop_break(&_loopNew);
+        task_stop(&_taskNew);
+    }
+    else if (strcmp(buf, "break new loop") == 0)
+    {
+        evloop_break(&_loopNew);
+    }
+    else if (strcmp(buf, "start timer1") == 0)
+    {
+        evtm_init(&_timer1, _timer1Expired, 5000, NULL, EV_TIMER_ONESHOT);
+        dtrace();
+        evtm_start(&_loopNew, &_timer1);
+    }
+    else if (strcmp(buf, "stop timer1") == 0)
+    {
+        dtrace();
+        evtm_stop(&_loopNew, &_timer1);
+    }
+    else if (strcmp(buf, "start timer2") == 0)
+    {
+        evtm_init(&_timer2, _timer2Expired, 2000, NULL, EV_TIMER_PERIODIC);
+        dtrace();
+        evtm_start(&_loopNew, &_timer2);
+    }
+    else if (strcmp(buf, "stop timer2") == 0)
+    {
+        dtrace();
+        evtm_stop(&_loopNew, &_timer2);
+    }
+    else if (strcmp(buf, "evonce") == 0)
+    {
+        long i = 0;
+        for (i=0; i<10; i++)
+        {
+            dtrace();
+            ev_once(&_loopNew, _onceCallback, (void*)i);
+        }
+    }
+    else
+    {
+        dprint("[taco] %s", buf);
+    }
 
-static void _tm2Cb(tEvLoop* loop, tEvTimer* tm, void* arg)
-{
-    static int count = 0;
-    dprint("TIMEOUT 2 - periodically, count = %d", count);
-    count++;
+    return;
 }
 
 int main(int argc, char const *argv[])
 {
-    tEvLoop loop = {};
-    evloop_init(&loop, 50);
+    tEvIo io;
+    tEvLoop loop;
 
-    tEvSignal sig = {};
-    evsig_init(&sig, _sigIntCb, SIGINT, NULL);
-    evsig_start(&loop, &sig);
+    task_system_init();
 
-    tEvIo io = {};
-    evio_init(&io, _stdinCb, 0 /* STDIN */, NULL);
+    dtrace();
+
+    evloop_init(&loop, 1000);
+
+    evio_init(&io, _processStdin, 0, NULL);
     evio_start(&loop, &io);
-
-    tEvTimer tm1 = {};
-    evtm_init(&tm1, _tm1Cb, 5000, NULL, EV_TIMER_ONSHOT);
-    evtm_start(&loop, &tm1);
-
-    tEvTimer tm2 = {};
-    evtm_init(&tm2, _tm2Cb, 1000, NULL, EV_TIMER_PERIODIC);
-    evtm_start(&loop, &tm2);
 
     evloop_run(&loop);
 
     evloop_uninit(&loop);
-    dprint("over");
+
+    task_system_uninit();
+
+    dprint("ok");
     return 0;
 }
