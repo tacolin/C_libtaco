@@ -9,6 +9,7 @@ include_directories("${ROOT_DIR}/include")
 
 add_definitions(-g)
 add_definitions(-Werror)
+add_definitions(-D_GNU_SOURCE)
 # add_definitions(-pthread)
 set(CMAKE_C_FLAGS ${CMAKE_C_FLAGS} "-pthread")
 
