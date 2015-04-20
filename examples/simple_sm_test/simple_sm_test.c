@@ -40,17 +40,17 @@ int main(int argc, char const *argv[])
     tSmSt* state2 = sm_createSt(&sm, "state2", _enterSt, _exitSt);
     sm_addSt(&sm, root, state2, 0);
 
-    tSmTrans* trans = sm_createTrans(&sm, "event1", NULL, 0, "state2", _action);
-    sm_addTrans(&sm, state1, trans);
-
-    trans = sm_createTrans(&sm, "event1", NULL, 0, "state1", _action);
-    sm_addTrans(&sm, state2, trans);
-
     tSmSt* sub1 = sm_createSt(&sm, "sub_state1", _enterSt, _exitSt);
     sm_addSt(&sm, state1, sub1, 1);
 
     tSmSt* sub2 = sm_createSt(&sm, "sub_state2", _enterSt, _exitSt);
     sm_addSt(&sm, state1, sub2, 0);
+
+    tSmTrans* trans = sm_createTrans(&sm, "event1", NULL, 0, "state2", _action);
+    sm_addTrans(&sm, state1, trans);
+
+    trans = sm_createTrans(&sm, "event1", NULL, 0, "state1", _action);
+    sm_addTrans(&sm, state2, trans);
 
     trans = sm_createTrans(&sm, "event2", NULL, 0, "sub_state2", _action);
     sm_addTrans(&sm, sub1, trans);

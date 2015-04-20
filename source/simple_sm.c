@@ -176,25 +176,6 @@ tSmTrans* sm_createTrans(tSm* sm, char* ev_name, tSmGuardFn on_guard, int guard_
     return  trans;
 }
 
-tSmStatus sm_addTrans(tSm* sm, tSmSt* start_st, tSmTrans* trans)
-{
-    check_if(sm == NULL, return SM_ERROR, "sm is null");
-    check_if(sm->is_init != 1, return SM_ERROR, "sm is not init yet");
-    check_if(start_st == NULL, return SM_ERROR, "start_st is null");
-    check_if(trans == NULL, return SM_ERROR, "trans is null");
-
-    tree_route(start_st, trans->next_st, &trans->route);
-
-    tSmSt* ancestor = tree_commonAncestor(start_st, trans->next_st);
-    check_if(ancestor == NULL, return SM_ERROR, "ancestor is null");
-
-    trans->ancestor = ancestor;
-
-    list_append(&start_st->translist, trans);
-
-    return SM_OK;
-}
-
 static tSmSt* _findInitSubState(tSmSt* st)
 {
     if (TREE_OK == tree_isLeaf(st))
@@ -214,6 +195,43 @@ static tSmSt* _findInitSubState(tSmSt* st)
     }
 
     return NULL;
+}
+
+tSmStatus sm_addTrans(tSm* sm, tSmSt* start_st, tSmTrans* trans)
+{
+    check_if(sm == NULL, return SM_ERROR, "sm is null");
+    check_if(sm->is_init != 1, return SM_ERROR, "sm is not init yet");
+    check_if(start_st == NULL, return SM_ERROR, "start_st is null");
+    check_if(trans == NULL, return SM_ERROR, "trans is null");
+
+    tree_route(start_st, trans->next_st, &trans->route);
+
+    tSmSt* init_sub = _findInitSubState(trans->next_st);
+    if (init_sub != trans->next_st)
+    {
+        tList tmplist;
+        list_init(&tmplist, NULL);
+        tree_route(trans->next_st, init_sub, &tmplist);
+        tListObj* obj;
+        tSmSt* tmpst;
+        LIST_FOREACH(&tmplist, obj, tmpst)
+        {
+            if (tmpst != trans->next_st)
+            {
+                list_append(&trans->route, tmpst);
+            }
+        }
+        list_clean(&tmplist);
+    }
+
+    tSmSt* ancestor = tree_commonAncestor(start_st, trans->next_st);
+    check_if(ancestor == NULL, return SM_ERROR, "ancestor is null");
+
+    trans->ancestor = ancestor;
+
+    list_append(&start_st->translist, trans);
+
+    return SM_OK;
 }
 
 tSmStatus sm_start(tSm* sm)
