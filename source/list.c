@@ -90,7 +90,7 @@ tListStatus list_append(tList* list, void* content)
     check_if(list == NULL, return LIST_ERROR, "list is null");
     check_if(content == NULL, return LIST_ERROR, "content is null");
     check_if(_checkList(list) != LIST_OK, return LIST_ERROR, "_checkList failed");
-    check_if(list_find(list, NULL, content) != NULL, return LIST_ERROR, "content is already in list");
+    // check_if(list_find(list, NULL, content) != NULL, return LIST_ERROR, "content is already in list");
 
     tListObj* obj = calloc(sizeof(tListObj), 1);
     obj->content = content;

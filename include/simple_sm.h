@@ -26,7 +26,7 @@ struct tSm;
 typedef tSmStatus (*tSmStEntryFn)(struct tSm* sm, struct tSmSt* state);
 typedef tSmStatus (*tSmStExitFn)(struct tSm* sm, struct tSmSt* state);
 typedef tSmStatus (*tSmTransAction)(struct tSm* sm, struct tSmEv* ev);
-typedef int (*tSmGuardFn)(struct tSm* sm, struct tSmSt* state, struct tSmEv* ev);
+typedef int8_t (*tSmGuardFn)(struct tSm* sm, struct tSmSt* state, struct tSmEv* ev);
 
 typedef struct tSmEv
 {
@@ -41,7 +41,7 @@ typedef struct tSmTrans
     int evid;
 
     tSmGuardFn on_guard;
-    int guard_value;
+    int8_t guard_value;
 
     struct tSmSt* next_st;
 
@@ -63,7 +63,10 @@ typedef struct tSmSt
     tSmStEntryFn on_entry;
     tSmStExitFn  on_exit;
 
-    tList translist;
+    // tList translist;
+
+    tSmGuardFn* guard_array;
+    tSmTrans**  trans_array;
 
     struct tSmSt* curr_sub_state;
 
@@ -81,6 +84,7 @@ typedef struct tSm
     tSmSt* root;
 
     int max_ev_value;
+    int ev_bits;
 
     int is_init;
     int is_started;
@@ -103,7 +107,7 @@ tSmSt* sm_rootSt(tSm* sm);
 tSmSt* sm_createSt(tSm* sm, char* name, tSmStEntryFn on_entry, tSmStExitFn on_exit);
 tSmStatus sm_addSt(tSm* sm, tSmSt* parent_st, tSmSt* child_st, int is_init_state);
 
-tSmTrans* sm_createTrans(tSm* sm, int evid, tSmGuardFn on_guard, int guard_value, char* next_st_name, tSmTransAction on_act);
+tSmTrans* sm_createTrans(tSm* sm, int evid, tSmGuardFn on_guard, int8_t guard_value, char* next_st_name, tSmTransAction on_act);
 tSmStatus sm_addTrans(tSm* sm, tSmSt* start_st, tSmTrans* trans);
 
 tSmStatus sm_start(tSm* sm);

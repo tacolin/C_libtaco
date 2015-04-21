@@ -16,7 +16,26 @@ static void _destroySt(void* input)
     check_if(input == NULL, return, "input is null");
 
     tSmSt* st = (tSmSt*)input;
-    list_clean(&st->translist);
+    // list_clean(&st->translist);
+
+    if (st->guard_array)
+    {
+        free(st->guard_array);
+    }
+
+    if (st->trans_array)
+    {
+        int num = 255 << st->sm->ev_bits;
+        int i;
+        for (i=0; i<num; i++)
+        {
+            if (st->trans_array[i])
+            {
+                _destroyTrans(st->trans_array[i]);
+            }
+        }
+        free(st->trans_array);
+    }
     free(st);
 }
 
@@ -29,6 +48,12 @@ tSmStatus sm_init(tSm* sm, char* name, int max_ev_value)
 
     snprintf(sm->name, SM_NAME_SIZE, "%s", name);
     sm->max_ev_value = max_ev_value;
+
+    int tmp = max_ev_value;
+    for(sm->ev_bits=0; tmp>0; sm->ev_bits++)
+    {
+        tmp >>= 1;
+    }
 
     sm->root = calloc(sizeof(tSmSt), 1);
     check_if(sm->root == NULL, return SM_ERROR, "calloc failed");
@@ -89,7 +114,10 @@ tSmSt* sm_createSt(tSm* sm, char* name, tSmStEntryFn on_entry, tSmStExitFn on_ex
     st->on_exit  = on_exit;
     st->sm       = sm;
 
-    list_init(&st->translist, _destroyTrans);
+    // list_init(&st->translist, _destroyTrans);
+
+    st->guard_array = calloc(sizeof(tSmGuardFn), sm->max_ev_value);
+    st->trans_array = calloc(sizeof(tSmTrans*), 255 << sm->ev_bits);
 
     return st;
 }
@@ -140,7 +168,7 @@ static tSmSt* _findSt(tSm* sm, char* st_name)
     return st;
 }
 
-tSmTrans* sm_createTrans(tSm* sm, int evid, tSmGuardFn on_guard, int guard_value, char* next_st_name, tSmTransAction on_act)
+tSmTrans* sm_createTrans(tSm* sm, int evid, tSmGuardFn on_guard, int8_t guard_value, char* next_st_name, tSmTransAction on_act)
 {
     check_if(sm == NULL, return NULL, "sm is null");
     check_if(evid > sm->max_ev_value, return NULL, "ev %d > max_ev_value %d", evid, sm->max_ev_value);
@@ -224,7 +252,22 @@ tSmStatus sm_addTrans(tSm* sm, tSmSt* start_st, tSmTrans* trans)
     check_if(start_st == NULL, return SM_ERROR, "start_st is null");
     check_if(trans == NULL, return SM_ERROR, "trans is null");
 
-    tree_route(start_st, trans->next_st, &trans->route);
+    if (start_st != trans->next_st)
+    {
+        tree_route(start_st, trans->next_st, &trans->route);
+
+        trans->ancestor = tree_commonAncestor(start_st, trans->next_st);
+        check_if(trans->ancestor == NULL, return SM_ERROR, "tree_commonAncestor failed");
+    }
+    else
+    {
+        list_append(&trans->route, start_st);
+        list_append(&trans->route, tree_parent(start_st));
+        list_append(&trans->route, trans->next_st);
+
+        trans->ancestor = tree_parent(start_st);
+        check_if(trans->ancestor == NULL, return SM_ERROR, "tree_commonAncestor failed");
+    }
 
     tSmSt* init_sub = _findInitSubState(trans->next_st);
     if (init_sub != trans->next_st)
@@ -245,10 +288,20 @@ tSmStatus sm_addTrans(tSm* sm, tSmSt* start_st, tSmTrans* trans)
         list_clean(&tmplist);
     }
 
-    trans->ancestor = tree_commonAncestor(start_st, trans->next_st);
-    check_if(trans->ancestor == NULL, return SM_ERROR, "tree_commonAncestor failed");
+    // list_append(&start_st->translist, trans);
 
-    list_append(&start_st->translist, trans);
+    start_st->guard_array[trans->evid] = trans->on_guard;
+    int idx = 0;
+    if (trans->on_guard)
+    {
+        idx = (trans->guard_value << sm->ev_bits) | trans->evid;
+    }
+    else
+    {
+        idx = trans->evid;
+    }
+    idx += 127;
+    start_st->trans_array[idx] = trans;
 
     return SM_OK;
 }
@@ -275,40 +328,78 @@ tSmStatus sm_stop(tSm* sm)
     return SM_OK;
 }
 
+// static tSmTrans* _findTrans(tSm* sm, tSmSt* st, tSmEv* ev)
+// {
+//     void* obj = NULL;
+//     tSmTrans* trans = NULL;
+//     LIST_FOREACH(&st->translist, obj, trans)
+//     {
+//         if (trans->evid == ev->evid)
+//         {
+//             if (trans->on_guard)
+//             {
+//                 if (trans->on_guard(sm, st, ev) == trans->guard_value)
+//                 {
+//                     break;
+//                 }
+//             }
+//             else
+//             {
+//                 break;
+//             }
+//         }
+//     }
+
+//     return trans;
+// }
+
 static tSmTrans* _findTrans(tSm* sm, tSmSt* st, tSmEv* ev)
 {
-    void* obj = NULL;
-    tSmTrans* trans = NULL;
-    LIST_FOREACH(&st->translist, obj, trans)
+    if (st->guard_array == NULL)
     {
-        if (trans->evid == ev->evid)
-        {
-            if (trans->on_guard)
-            {
-                if (trans->on_guard(sm, st, ev) == trans->guard_value)
-                {
-                    break;
-                }
-            }
-            else
-            {
-                break;
-            }
-        }
+        return NULL;
     }
 
-    return trans;
+    int idx;
+    if (st->guard_array[ev->evid] == NULL)
+    {
+        idx = ev->evid;
+    }
+    else
+    {
+        int8_t guard_value = st->guard_array[ev->evid](sm, st, ev);
+        idx = (guard_value << sm->ev_bits) | ev->evid;
+    }
+    idx += 127;
+    return st->trans_array[idx];
 }
 
-static tSmStatus _handleEv(tSm* sm, tSmTrans* trans, tSmEv* ev)
+static tSmStatus _handleEv(tSm* sm, tSmSt* st, tSmTrans* trans, tSmEv* ev)
 {
     static const int mode_exit = 0;
     static const int mode_enter = 1;
 
+    tList tmp;
+    list_init(&tmp, NULL);
+    tSmSt* tmpst;
+    for (tmpst = st->curr_sub_state; tmpst; tmpst = tmpst->curr_sub_state)
+    {
+        list_insert(&tmp, tmpst);
+    }
+    void* obj;
+    LIST_FOREACH(&tmp, obj, tmpst)
+    {
+        if (tmpst->on_exit)
+        {
+            tmpst->on_exit(sm, tmpst);
+        }
+    }
+    list_clean(&tmp);
+
     int mode = mode_exit;
     tSmSt* pass_st;
     tSmSt* parent;
-    void* obj;
+    // void* obj;
     LIST_FOREACH(&trans->route, obj, pass_st)
     {
         if (pass_st == trans->ancestor)
@@ -346,7 +437,7 @@ static tSmStatus _propogateEv(tSm* sm, tSmSt* st, tSmEv* ev)
     tSmTrans* trans = _findTrans(sm, st, ev);
     if (trans != NULL)
     {
-        return _handleEv(sm, trans, ev);
+        return _handleEv(sm, st, trans, ev);
     }
 
     if (st->curr_sub_state == NULL)

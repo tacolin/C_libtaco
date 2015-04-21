@@ -25,7 +25,7 @@ static tSmStatus _action_new(tSm* sm, tSmEv* ev)
     return SM_OK;
 }
 
-static int _guard2(tSm* sm, tSmSt* st, tSmEv* ev)
+static int8_t _guard(tSm* sm, tSmSt* st, tSmEv* ev)
 {
     long val = (long)ev->arg1;
     return (int8_t)val;
@@ -72,24 +72,27 @@ int main(int argc, char const *argv[])
     trans = sm_createTrans(&sm, EVENT2, NULL, 0, "sub_state2", _action);
     sm_addTrans(&sm, sub1, trans);
 
-    trans = sm_createTrans(&sm, EVENT3, NULL, 0, "sub_state1", _action_new);
+    trans = sm_createTrans(&sm, EVENT3, _guard, 1, "sub_state1", _action_new);
+    sm_addTrans(&sm, sub2, trans);
+
+    trans = sm_createTrans(&sm, EVENT3, _guard, -1, "sub_state2", _action_new);
     sm_addTrans(&sm, sub2, trans);
 
     sm_start(&sm);
 
-    dprint("===");
+    dprint("=== send EVENT1");
 
     sm_sendEv(&sm, EVENT1, 0, 0);
 
-    dprint("===");
+    dprint("=== send EVENT1");
 
     sm_sendEv(&sm, EVENT1, 0, 0);
 
-    dprint("===");
+    dprint("=== send EVENT2");
 
     sm_sendEv(&sm, EVENT2, 0, 0);
 
-    dprint("===");
+    dprint("=== send EVENT3 0");
 
     sm_sendEv(&sm, EVENT3, 0, 0);
 
