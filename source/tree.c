@@ -336,11 +336,20 @@ tTreeStatus tree_bfs(tTree* tree, tTreeNodeExecFunc exec_fn)
     return TREE_OK;
 }
 
-tList* tree_getChilds(void* node)
+tList* tree_childs(void* node)
 {
     check_if(node == NULL, return NULL, "node is null");
     check_if(_isNodeClean(node) == TREE_OK, return NULL, "node is not added to any tree");
 
     tTreeHdr* hdr = (tTreeHdr*)node;
     return &(hdr->childs);
+}
+
+void* tree_parent(void* node)
+{
+    check_if(node == NULL, return NULL, "node is null");
+    check_if(_isNodeClean(node) == TREE_OK, return NULL, "node is not added to any tree");
+
+    tTreeHdr* hdr = (tTreeHdr*)node;
+    return hdr->parent;
 }

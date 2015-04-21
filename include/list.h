@@ -6,9 +6,9 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #define LIST_FOREACH(pList, _obj, _content) \
-    for (_obj = list_headObj(pList), _content = (_obj) ? _obj->content : NULL; \
+    for (_obj = list_headObj(pList), _content = (_obj) ? ((tListObj*)_obj)->content : NULL; \
          _obj && _content; \
-         _obj = list_nextObj(pList, _obj), _content = (_obj) ? _obj->content : NULL)
+         _obj = list_nextObj(pList, (tListObj*)_obj), _content = (_obj) ? ((tListObj*)_obj)->content : NULL)
 
 ////////////////////////////////////////////////////////////////////////////////
 

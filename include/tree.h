@@ -58,6 +58,7 @@ tTreeStatus tree_route(void* src, void* dst, tList* route);
 tTreeStatus tree_dfs(tTree* tree, tTreeNodeExecFunc exec_fn);
 tTreeStatus tree_bfs(tTree* tree, tTreeNodeExecFunc exec_fn);
 
-tList* tree_getChilds(void* node);
+tList* tree_childs(void* node);
+void* tree_parent(void* node);
 
 #endif //_TREE_H_

@@ -2,16 +2,33 @@
 
 #include "simple_sm.h"
 
-static tSmStatus _action(tSm* sm, void* ev_data)
+enum
+{
+    EVENT1,
+    EVENT2,
+    EVENT3,
+
+    MAX_EVENTS
+};
+
+static tSmStatus _action(tSm* sm, tSmEv* ev)
 {
     dprint("here");
     return SM_OK;
 }
 
-static int _guard2(tSm* sm, tSmSt* st, void* ev_data)
+static tSmStatus _action_new(tSm* sm, tSmEv* ev)
 {
-    long val = (long)ev_data;
-    return (int)val;
+    dprint("here");
+    sm_sendEv(sm, EVENT1, 0, 0);
+    sm_sendEv(sm, EVENT1, 0, 0);
+    return SM_OK;
+}
+
+static int _guard2(tSm* sm, tSmSt* st, tSmEv* ev)
+{
+    long val = (long)ev->arg1;
+    return (int8_t)val;
 }
 
 static tSmStatus _enterSt(tSm* sm, tSmSt* st)
@@ -30,7 +47,7 @@ int main(int argc, char const *argv[])
 {
     tSm sm;
 
-    sm_init(&sm, "tacolin");
+    sm_init(&sm, "tacolin", MAX_EVENTS);
 
     tSmSt* root = sm_rootSt(&sm);
 
@@ -46,29 +63,37 @@ int main(int argc, char const *argv[])
     tSmSt* sub2 = sm_createSt(&sm, "sub_state2", _enterSt, _exitSt);
     sm_addSt(&sm, state1, sub2, 0);
 
-    tSmTrans* trans = sm_createTrans(&sm, "event1", NULL, 0, "state2", _action);
+    tSmTrans* trans = sm_createTrans(&sm, EVENT1, NULL, 0, "state2", _action);
     sm_addTrans(&sm, state1, trans);
 
-    trans = sm_createTrans(&sm, "event1", NULL, 0, "state1", _action);
+    trans = sm_createTrans(&sm, EVENT1, NULL, 0, "state1", _action);
     sm_addTrans(&sm, state2, trans);
 
-    trans = sm_createTrans(&sm, "event2", NULL, 0, "sub_state2", _action);
+    trans = sm_createTrans(&sm, EVENT2, NULL, 0, "sub_state2", _action);
     sm_addTrans(&sm, sub1, trans);
 
-    trans = sm_createTrans(&sm, "event3", NULL, 0, "sub_state1", _action);
+    trans = sm_createTrans(&sm, EVENT3, NULL, 0, "sub_state1", _action_new);
     sm_addTrans(&sm, sub2, trans);
 
     sm_start(&sm);
 
-    dprint("");
+    dprint("===");
 
-    sm_sendEv(&sm, "event1", NULL);
+    sm_sendEv(&sm, EVENT1, 0, 0);
 
-    dprint("");
+    dprint("===");
 
-    sm_sendEv(&sm, "event1", NULL);
+    sm_sendEv(&sm, EVENT1, 0, 0);
 
-    dprint("");
+    dprint("===");
+
+    sm_sendEv(&sm, EVENT2, 0, 0);
+
+    dprint("===");
+
+    sm_sendEv(&sm, EVENT3, 0, 0);
+
+    dprint("===");
 
     sm_stop(&sm);
 

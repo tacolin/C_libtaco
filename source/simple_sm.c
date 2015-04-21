@@ -1,5 +1,7 @@
 #include "simple_sm.h"
 
+////////////////////////////////////////////////////////////////////////////////
+
 static void _destroyTrans(void* input)
 {
     check_if(input == NULL, return, "input is null");
@@ -20,29 +22,28 @@ static void _destroySt(void* input)
 
 ////////////////////////////////////////////////////////////////////////////////
 
-tSmStatus sm_init(tSm* sm, char* name)
+tSmStatus sm_init(tSm* sm, char* name, int max_ev_value)
 {
     check_if(sm == NULL, return SM_ERROR, "sm is null");
+    check_if(max_ev_value <= 0, return SM_ERROR, "max_ev_value = %d invalid", max_ev_value);
 
     snprintf(sm->name, SM_NAME_SIZE, "%s", name);
+    sm->max_ev_value = max_ev_value;
 
     sm->root = calloc(sizeof(tSmSt), 1);
+    check_if(sm->root == NULL, return SM_ERROR, "calloc failed");
 
     snprintf(sm->root->name, SM_NAME_SIZE, "%s-root", name);
 
-    tree_init(&sm->st_tree, sm->root, _destroySt);
+    tTreeStatus tree_ret   = tree_init(&sm->st_tree, sm->root, _destroySt);
+    check_if(tree_ret != TREE_OK, return SM_ERROR, "tree_init failed");
 
-    queue_init(&sm->evqueue, sm->name, SM_MAX_EV_NUM, free, QUEUE_UNSUSPEND, QUEUE_UNSUSPEND);
+    tQueueStatus queue_ret = queue_init(&sm->evqueue, sm->name, SM_MAX_EVQUEUE_NUM, free, QUEUE_UNSUSPEND, QUEUE_UNSUSPEND);
+    check_if(queue_ret != QUEUE_OK, return SM_ERROR, "queue_init failed");
 
-    hash_init(&sm->ev_hash, SM_MAX_EV_NUM, free);
-
-    sm->last_ev_id = 0;
-
-    sm->curr_st = NULL;
-
-    sm->is_busy = 0;
+    sm->is_busy    = 0;
     sm->is_started = 0;
-    sm->is_init = 1;
+    sm->is_init    = 1;
 
     return SM_OK;
 }
@@ -59,7 +60,6 @@ tSmStatus sm_uninit(tSm* sm)
 
     sm->is_init = 0;
 
-    hash_uninit(&sm->ev_hash);
     queue_clean(&sm->evqueue);
     tree_clean(&sm->st_tree);
 
@@ -81,11 +81,13 @@ tSmSt* sm_createSt(tSm* sm, char* name, tSmStEntryFn on_entry, tSmStExitFn on_ex
     check_if(name == NULL, return NULL, "name is null");
 
     tSmSt* st = calloc(sizeof(tSmSt), 1);
+    check_if(st == NULL, return NULL, "calloc failed");
 
     snprintf(st->name, SM_NAME_SIZE, "%s", name);
+
     st->on_entry = on_entry;
-    st->on_exit = on_exit;
-    st->sm = sm;
+    st->on_exit  = on_exit;
+    st->sm       = sm;
 
     list_init(&st->translist, _destroyTrans);
 
@@ -101,8 +103,10 @@ tSmStatus sm_addSt(tSm* sm, tSmSt* parent_st, tSmSt* child_st, int is_init_state
 
     if (is_init_state)
     {
-        tList* childs = tree_getChilds(parent_st);
-        tListObj* obj;
+        tList* childs = tree_childs(parent_st);
+        check_if(childs == NULL, return SM_ERROR, "tree_childs failed");
+
+        void* obj;
         tSmSt* st;
         LIST_FOREACH(childs, obj, st)
         {
@@ -110,67 +114,86 @@ tSmStatus sm_addSt(tSm* sm, tSmSt* parent_st, tSmSt* child_st, int is_init_state
         }
     }
 
-    tree_add(parent_st, child_st);
+    tTreeStatus tree_ret = tree_add(parent_st, child_st);
+    check_if(tree_ret != TREE_OK, return SM_ERROR, "tree_add failed");
 
     child_st->is_init_state = is_init_state;
 
     return SM_OK;
 }
 
-tSmStatus sm_addEv(tSm* sm, char* ev_name)
-{
-    check_if(sm == NULL, return SM_ERROR, "sm is null");
-    check_if(sm->is_init != 1, return SM_ERROR, "sm is not init yet");
-    check_if(ev_name == NULL, return SM_ERROR, "ev_name is null");
-
-    int* evid = hash_find(&sm->ev_hash, ev_name);
-    check_if(evid != NULL, return SM_ERROR, "ev_name (%s) is already added", ev_name);
-
-    evid = malloc(sizeof(int));
-    sm->last_ev_id++;
-    *evid  = sm->last_ev_id;
-
-    hash_add(&sm->ev_hash, ev_name, evid);
-
-    return SM_OK;
-}
-
-tSmTrans* sm_createTrans(tSm* sm, char* ev_name, tSmGuardFn on_guard, int guard_value, char* next_st_name, tSmTransAction on_act)
+static tSmSt* _findSt(tSm* sm, char* st_name)
 {
     check_if(sm == NULL, return NULL, "sm is null");
+    check_if(st_name == NULL, return NULL, "st_name is null");
     check_if(sm->is_init != 1, return NULL, "sm is not init yet");
-    check_if(ev_name == NULL, return NULL, "ev_name is null");
-    check_if(next_st_name == NULL, return NULL, "next_st_name is null");
 
-    int* evid = hash_find(&sm->ev_hash, ev_name);
-    if (evid == NULL)
-    {
-        sm_addEv(sm, ev_name);
-        evid = hash_find(&sm->ev_hash, ev_name);
-    }
-
-    tListObj* obj;
-    tSmSt* st;
+    void* obj = NULL;
+    tSmSt* st = NULL;
     LIST_FOREACH(&sm->st_tree.nodes, obj, st)
     {
-        if (0 == strcmp(next_st_name, st->name))
+        if (0 == strcmp(st_name, st->name))
         {
             break;
         }
     }
-    check_if(st == NULL, return NULL, "st (%s) is not added to sm", next_st_name);
+    return st;
+}
+
+tSmTrans* sm_createTrans(tSm* sm, int evid, tSmGuardFn on_guard, int guard_value, char* next_st_name, tSmTransAction on_act)
+{
+    check_if(sm == NULL, return NULL, "sm is null");
+    check_if(evid > sm->max_ev_value, return NULL, "ev %d > max_ev_value %d", evid, sm->max_ev_value);
+    check_if(sm->is_init != 1, return NULL, "sm is not init yet");
+    check_if(next_st_name == NULL, return NULL, "next_st_name is null");
+
+    tSmSt* st = _findSt(sm, next_st_name);
+    check_if(st == NULL, return NULL, "state %s is not added to sm", next_st_name);
 
     tSmTrans* trans = calloc(sizeof(tSmTrans), 1);
+    check_if(trans == NULL, return NULL, "calloc failed");
 
-    list_init(&trans->route, NULL);
-
-    trans->evid = *evid;
-    trans->on_guard = on_guard;
+    trans->evid        = evid;
+    trans->on_guard    = on_guard;
     trans->guard_value = guard_value;
-    trans->next_st = st;
-    trans->on_act = on_act;
+    trans->next_st     = st;
+    trans->on_act      = on_act;
 
-    return  trans;
+    if (LIST_OK != list_init(&trans->route, NULL))
+    {
+        derror("list_init failed");
+        free(trans);
+        return NULL;
+    }
+
+    return trans;
+}
+
+static tSmStatus _doInitTrans(tSm* sm, tSmSt* st)
+{
+    check_if(sm == NULL, return SM_ERROR, "sm is null");
+    check_if(sm->is_init != 1, return SM_ERROR, "sm is not init yet");
+    check_if(st == NULL, return SM_ERROR, "st is null");
+
+    tList* childs = tree_childs(st);
+    check_if(childs == NULL, return SM_ERROR, "tree_childs failed");
+
+    void* obj;
+    tSmSt* ch;
+    LIST_FOREACH(childs, obj, ch)
+    {
+        if (ch->is_init_state)
+        {
+            st->curr_sub_state = ch;
+            if (ch->on_entry)
+            {
+                ch->on_entry(sm, ch);
+            }
+            _doInitTrans(sm, ch);
+        }
+    }
+
+    return SM_OK;
 }
 
 static tSmSt* _findInitSubState(tSmSt* st)
@@ -181,7 +204,7 @@ static tSmSt* _findInitSubState(tSmSt* st)
     }
 
     tTreeHdr* hdr = (tTreeHdr*)st;
-    tListObj* obj;
+    void* obj;
     tSmSt* subst;
     LIST_FOREACH(&hdr->childs, obj, subst)
     {
@@ -209,7 +232,8 @@ tSmStatus sm_addTrans(tSm* sm, tSmSt* start_st, tSmTrans* trans)
         tList tmplist;
         list_init(&tmplist, NULL);
         tree_route(trans->next_st, init_sub, &tmplist);
-        tListObj* obj;
+
+        void* obj;
         tSmSt* tmpst;
         LIST_FOREACH(&tmplist, obj, tmpst)
         {
@@ -221,10 +245,8 @@ tSmStatus sm_addTrans(tSm* sm, tSmSt* start_st, tSmTrans* trans)
         list_clean(&tmplist);
     }
 
-    tSmSt* ancestor = tree_commonAncestor(start_st, trans->next_st);
-    check_if(ancestor == NULL, return SM_ERROR, "ancestor is null");
-
-    trans->ancestor = ancestor;
+    trans->ancestor = tree_commonAncestor(start_st, trans->next_st);
+    check_if(trans->ancestor == NULL, return SM_ERROR, "tree_commonAncestor failed");
 
     list_append(&start_st->translist, trans);
 
@@ -237,24 +259,7 @@ tSmStatus sm_start(tSm* sm)
     check_if(sm->is_init != 1, return SM_ERROR, "sm is not init yet");
     check_if(sm->is_started != 0, return SM_ERROR, "sm is already started");
 
-    sm->curr_st = _findInitSubState(sm->root);
-    check_if(sm->curr_st == NULL, return SM_ERROR, "_findInitSubState failed");
-
-    tList init_trans;
-    list_init(&init_trans, NULL);
-    tree_route(sm->root, sm->curr_st, &init_trans);
-
-    tListObj* obj;
-    tSmSt* st;
-    LIST_FOREACH(&init_trans, obj, st)
-    {
-        if (st->on_entry)
-        {
-            st->on_entry(sm, st);
-        }
-    }
-    list_clean(&init_trans);
-
+    _doInitTrans(sm, sm->root);
     sm->is_started = 1;
 
     return SM_OK;
@@ -270,17 +275,17 @@ tSmStatus sm_stop(tSm* sm)
     return SM_OK;
 }
 
-tSmTrans* _findTrans(tSm* sm, tSmSt* st, int evid, void* ev_data)
+static tSmTrans* _findTrans(tSm* sm, tSmSt* st, tSmEv* ev)
 {
-    tListObj* obj = NULL;
+    void* obj = NULL;
     tSmTrans* trans = NULL;
     LIST_FOREACH(&st->translist, obj, trans)
     {
-        if (trans->evid == evid)
+        if (trans->evid == ev->evid)
         {
             if (trans->on_guard)
             {
-                if (trans->on_guard(sm, st, ev_data) == trans->guard_value)
+                if (trans->on_guard(sm, st, ev) == trans->guard_value)
                 {
                     break;
                 }
@@ -295,31 +300,20 @@ tSmTrans* _findTrans(tSm* sm, tSmSt* st, int evid, void* ev_data)
     return trans;
 }
 
-tSmStatus _procEv(tSm* sm, tSmSt* curr_st, int evid, void* ev_data)
+static tSmStatus _handleEv(tSm* sm, tSmTrans* trans, tSmEv* ev)
 {
-    tSmSt* parent = (tSmSt*)(curr_st->hdr.parent);
-    if (parent && parent != sm->root)
-    {
-        _procEv(sm, parent, evid, ev_data);
-    }
-
-    tSmTrans* trans = _findTrans(sm, curr_st, evid, ev_data);
-    if (trans == NULL)
-    {
-        return SM_OK;
-    }
-
     static const int mode_exit = 0;
     static const int mode_enter = 1;
 
     int mode = mode_exit;
     tSmSt* pass_st;
-    tListObj* obj;
+    tSmSt* parent;
+    void* obj;
     LIST_FOREACH(&trans->route, obj, pass_st)
     {
         if (pass_st == trans->ancestor)
         {
-            trans->on_act(sm, ev_data);
+            trans->on_act(sm, ev);
             mode = mode_enter;
         }
         else if (mode == mode_exit)
@@ -335,38 +329,60 @@ tSmStatus _procEv(tSm* sm, tSmSt* curr_st, int evid, void* ev_data)
             {
                 pass_st->on_entry(sm, pass_st);
             }
+
+            parent = tree_parent(pass_st);
+            if (parent)
+            {
+                parent->curr_sub_state = pass_st;
+            }
         }
     }
-    sm->curr_st = trans->next_st;
 
     return SM_OK;
 }
 
-tSmStatus sm_sendEv(tSm* sm, char* ev_name, void* ev_data)
+static tSmStatus _propogateEv(tSm* sm, tSmSt* st, tSmEv* ev)
+{
+    tSmTrans* trans = _findTrans(sm, st, ev);
+    if (trans != NULL)
+    {
+        return _handleEv(sm, trans, ev);
+    }
+
+    if (st->curr_sub_state == NULL)
+    {
+        return SM_OK;
+    }
+
+    return _propogateEv(sm, st->curr_sub_state, ev);
+}
+
+tSmStatus sm_sendEv(tSm* sm, int evid, intptr_t arg1, intptr_t arg2)
 {
     check_if(sm == NULL, return SM_ERROR, "sm is null");
+    check_if(evid > sm->max_ev_value, return SM_ERROR, "ev %d > max_ev_value %d", evid, sm->max_ev_value);
     check_if(sm->is_init != 1, return SM_ERROR, "sm is not init yet");
     check_if(sm->is_started == 0, return SM_ERROR, "sm is stopped");
-
-    int* evid = hash_find(&sm->ev_hash, ev_name);
-    check_if(evid == NULL, return SM_ERROR, "ev (%s) is not added to sm", ev_name);
 
     if (sm->is_busy)
     {
         tSmEv* ev = calloc(sizeof(tSmEv), 1);
-        ev->evid = *evid;
-        ev->ev_data = ev_data;
+        ev->evid = evid;
+        ev->arg1 = arg1;
+        ev->arg2 = arg2;
         queue_put(&sm->evqueue, ev);
         return SM_OK;
     }
 
     sm->is_busy = 1;
-    _procEv(sm, sm->curr_st, *evid, ev_data);
+
+    tSmEv tmpev = {.evid = evid, .arg1 = arg1, .arg2 = arg2};
+    _propogateEv(sm, sm->root, &tmpev);
 
     tSmEv* ev;
     while (ev = queue_get(&sm->evqueue))
     {
-        _procEv(sm, sm->curr_st, ev->evid, ev->ev_data);
+        _propogateEv(sm, sm->root, ev);
         free(ev);
     }
 

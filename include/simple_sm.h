@@ -4,10 +4,11 @@
 #include "basic.h"
 #include "tree.h"
 #include "queue.h"
-#include "hash.h"
+
+#include <stdint.h>
 
 #define SM_NAME_SIZE 100
-#define SM_MAX_EV_NUM 1000
+#define SM_MAX_EVQUEUE_NUM 100
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -18,18 +19,20 @@ typedef enum
 
 } tSmStatus;
 
+struct tSmEv;
 struct tSmSt;
 struct tSm;
 
 typedef tSmStatus (*tSmStEntryFn)(struct tSm* sm, struct tSmSt* state);
 typedef tSmStatus (*tSmStExitFn)(struct tSm* sm, struct tSmSt* state);
-typedef tSmStatus (*tSmTransAction)(struct tSm* sm, void* ev_data);
-typedef int (*tSmGuardFn)(struct tSm* sm, struct tSmSt* state, void* ev_data);
+typedef tSmStatus (*tSmTransAction)(struct tSm* sm, struct tSmEv* ev);
+typedef int (*tSmGuardFn)(struct tSm* sm, struct tSmSt* state, struct tSmEv* ev);
 
 typedef struct tSmEv
 {
     int evid;
-    void* ev_data;
+    intptr_t arg1;
+    intptr_t arg2;
 
 } tSmEv;
 
@@ -62,6 +65,8 @@ typedef struct tSmSt
 
     tList translist;
 
+    struct tSmSt* curr_sub_state;
+
     struct tSm* sm;
 
     int is_init_state;
@@ -74,10 +79,8 @@ typedef struct tSm
 
     tTree st_tree;
     tSmSt* root;
-    tSmSt* curr_st;
 
-    tHashTable ev_hash;
-    int last_ev_id;
+    int max_ev_value;
 
     int is_init;
     int is_started;
@@ -90,7 +93,7 @@ typedef struct tSm
 
 ////////////////////////////////////////////////////////////////////////////////
 
-tSmStatus sm_init(tSm* sm, char* name);
+tSmStatus sm_init(tSm* sm, char* name, int max_ev_value);
 tSmStatus sm_uninit(tSm* sm);
 
 tSmStatus sm_setDb(tSm* sm, void* db);
@@ -100,14 +103,12 @@ tSmSt* sm_rootSt(tSm* sm);
 tSmSt* sm_createSt(tSm* sm, char* name, tSmStEntryFn on_entry, tSmStExitFn on_exit);
 tSmStatus sm_addSt(tSm* sm, tSmSt* parent_st, tSmSt* child_st, int is_init_state);
 
-tSmStatus sm_addEv(tSm* sm, char* ev_name);
-
-tSmTrans* sm_createTrans(tSm* sm, char* ev_name, tSmGuardFn on_guard, int guard_value, char* next_st_name, tSmTransAction on_act);
+tSmTrans* sm_createTrans(tSm* sm, int evid, tSmGuardFn on_guard, int guard_value, char* next_st_name, tSmTransAction on_act);
 tSmStatus sm_addTrans(tSm* sm, tSmSt* start_st, tSmTrans* trans);
 
 tSmStatus sm_start(tSm* sm);
 tSmStatus sm_stop(tSm* sm);
 
-tSmStatus sm_sendEv(tSm* sm, char* ev_name, void* ev_data);
+tSmStatus sm_sendEv(tSm* sm, int evid, intptr_t arg1, intptr_t arg2);
 
 #endif //_SIMPLE_SM_H_
