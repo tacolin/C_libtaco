@@ -5,9 +5,7 @@ static void _destroyTrans(void* input)
     check_if(input == NULL, return, "input is null");
 
     tSmTrans* trans = (tSmTrans*)input;
-
     list_clean(&trans->route);
-
     free(trans);
 }
 
@@ -16,9 +14,7 @@ static void _destroySt(void* input)
     check_if(input == NULL, return, "input is null");
 
     tSmSt* st = (tSmSt*)input;
-
     list_clean(&st->translist);
-
     free(st);
 }
 
@@ -39,6 +35,7 @@ tSmStatus sm_init(tSm* sm, char* name)
     queue_init(&sm->evqueue, sm->name, SM_MAX_EV_NUM, free, QUEUE_UNSUSPEND, QUEUE_UNSUSPEND);
 
     hash_init(&sm->ev_hash, SM_MAX_EV_NUM, free);
+
     sm->last_ev_id = 0;
 
     sm->curr_st = NULL;
@@ -104,10 +101,10 @@ tSmStatus sm_addSt(tSm* sm, tSmSt* parent_st, tSmSt* child_st, int is_init_state
 
     if (is_init_state)
     {
-        tTreeHdr* hdr = (tTreeHdr*)parent_st;
+        tList* childs = tree_getChilds(parent_st);
         tListObj* obj;
         tSmSt* st;
-        LIST_FOREACH(&hdr->childs, obj, st)
+        LIST_FOREACH(childs, obj, st)
         {
             check_if(st->is_init_state != 0, return SM_ERROR, "parent (%s) has init_state (%s)", parent_st->name, st->name);
         }
