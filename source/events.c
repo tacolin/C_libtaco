@@ -66,11 +66,11 @@ static void _handleInterThreadEv(tEvLoop* loop, tEv* input_ev, void* arg)
     {
         if (ev->type == EV_IO)
         {
-            if (ev->action == EV_IO_START)
+            if (ev->action == EV_ACT_IO_START)
             {
                 evio_start(loop, ev);
             }
-            else if (ev->action == EV_IO_STOP)
+            else if (ev->action == EV_ACT_IO_STOP)
             {
                 evio_stop(loop, ev);
             }
@@ -82,11 +82,11 @@ static void _handleInterThreadEv(tEvLoop* loop, tEv* input_ev, void* arg)
         }
         else if (ev->type == EV_SIGNAL)
         {
-            if (ev->action == EV_SIGNAL_START)
+            if (ev->action == EV_ACT_SIGNAL_START)
             {
                 evsig_start(loop, ev);
             }
-            else if (ev->action == EV_SIGNAL_STOP)
+            else if (ev->action == EV_ACT_SIGNAL_STOP)
             {
                 evsig_stop(loop, ev);
             }
@@ -98,7 +98,7 @@ static void _handleInterThreadEv(tEvLoop* loop, tEv* input_ev, void* arg)
         }
         else if (ev->type == EV_ONCE)
         {
-            if (ev->action == EV_ONCE_ONCE)
+            if (ev->action == EV_ACT_ONCE)
             {
                 ev_once(loop, ev->callback, ev->arg);
                 free(ev);
@@ -112,23 +112,23 @@ static void _handleInterThreadEv(tEvLoop* loop, tEv* input_ev, void* arg)
         }
         else if (ev->type == EV_TIMER)
         {
-            if (ev->action == EV_TIMER_START)
+            if (ev->action == EV_ACT_TIMER_START)
             {
                 evtm_start(loop, ev);
             }
-            else if (ev->action == EV_TIMER_STOP)
+            else if (ev->action == EV_ACT_TIMER_STOP)
             {
                 evtm_stop(loop, ev);
             }
-            else if (ev->action == EV_TIMER_PAUSE)
+            else if (ev->action == EV_ACT_TIMER_PAUSE)
             {
                 evtm_pause(loop, ev);
             }
-            else if (ev->action == EV_TIMER_RESUME)
+            else if (ev->action == EV_ACT_TIMER_RESUME)
             {
                 evtm_resume(loop, ev);
             }
-            else if (ev->action == EV_TIMER_RESTART)
+            else if (ev->action == EV_ACT_TIMER_RESTART)
             {
                 evtm_restart(loop, ev);
             }
@@ -139,7 +139,7 @@ static void _handleInterThreadEv(tEvLoop* loop, tEv* input_ev, void* arg)
             }
         }
 
-        ev->action = EV_ACTION_INVALID;
+        ev->action = EV_ACT_INVALID;
     }
 
     return;
@@ -180,9 +180,12 @@ static void _handleEv(tEvLoop* loop, tEv* ev)
         int check = eventfd_read(once->fd, &val);
         check_if(check < 0, return, "eventfd_read failed");
 
-        list_remove(&loop->evlist, once);
-
         once->callback(loop, once, once->arg);
+
+        struct epoll_event tmpev = {};
+        epoll_ctl(loop->epfd, EPOLL_CTL_DEL, once->fd, &tmpev);
+
+        loop->curr_ev_num--;
 
         close(once->fd);
         free(once);
@@ -238,9 +241,6 @@ tEvStatus evloop_init(tEvLoop* loop, int max_ev_num)
 
     memset(loop, 0, sizeof(tEvLoop));
 
-    tListStatus list_ret = list_init(&loop->evlist, _cleanEv);
-    check_if(list_ret != LIST_OK, return EV_ERROR, "list_init failed");
-
     tQueueStatus queue_ret = queue_init(&loop->inter_thread_queue,
                                         "evloop inter thread queue",
                                         max_ev_num, _cleanEv,
@@ -251,6 +251,7 @@ tEvStatus evloop_init(tEvLoop* loop, int max_ev_num)
     check_if(loop->epfd <= 0, return EV_ERROR, "epoll_create failed");
 
     loop->max_ev_num = max_ev_num;
+    loop->curr_ev_num = 0;
     loop->is_running = 0;
     loop->is_still_running = 0;
     loop->tid = 0;
@@ -270,7 +271,6 @@ tEvStatus evloop_uninit(tEvLoop* loop)
         evloop_break(loop);
     }
 
-    list_clean(&loop->evlist);
     queue_clean(&loop->inter_thread_queue);
 
     loop->is_init = 0;
@@ -279,6 +279,8 @@ tEvStatus evloop_uninit(tEvLoop* loop)
     loop->epfd = -1;
 
     loop->max_ev_num = 0;
+    loop->curr_ev_num = 0;
+    loop->is_running = 0;
     // loop->tid = 0;
 
     return EV_OK;
@@ -322,7 +324,6 @@ tEvStatus evloop_run(tEvLoop* loop)
             {
                 ev = (tEv*)(evbuf[i].data.ptr);
                 check_if(ev == NULL, goto _ERROR, "epoll ev is null");
-
                 _handleEv(loop, ev);
             }
         }
@@ -389,7 +390,7 @@ tEvStatus evio_init(tEvIo* io, tEvCallback callback, int fd, void* arg)
     io->callback = callback;
     io->loop = NULL;
     io->is_started = 0;
-    io->action = EV_ACTION_INVALID;
+    io->action = EV_ACT_INVALID;
 
     io->is_init = 1;
     return EV_OK;
@@ -405,13 +406,10 @@ tEvStatus evio_start(tEvLoop* loop, tEvIo* io)
 
     if (pthread_self() != loop->tid)
     {
-        return _saveInterThreadAction(loop, io, EV_IO_START);
+        return _saveInterThreadAction(loop, io, EV_ACT_IO_START);
     }
 
-    check_if(list_length(&loop->evlist) >= loop->max_ev_num, return EV_ERROR, "loop ev is full");
-
-    tListStatus ret = list_append(&loop->evlist, io);
-    check_if(ret != LIST_OK, return EV_ERROR, "list_append failed");
+    check_if(loop->curr_ev_num >= loop->max_ev_num, return EV_ERROR, "curr_ev_num = %d >= max_ev_num = %d", loop->curr_ev_num, loop->max_ev_num);
 
     struct epoll_event tmp = {
         .events = EPOLLIN,
@@ -419,12 +417,9 @@ tEvStatus evio_start(tEvLoop* loop, tEvIo* io)
     };
 
     int check = epoll_ctl(loop->epfd, EPOLL_CTL_ADD, io->fd, &tmp);
-    if (check < 0)
-    {
-        list_remove(&loop->evlist, io);
-        return EV_ERROR;
-    }
+    check_if(check < 0, return EV_ERROR, "epoll_ctl add failed");
 
+    loop->curr_ev_num++;
     io->loop = loop;
     io->is_started = 1;
 
@@ -441,18 +436,17 @@ tEvStatus evio_stop(tEvLoop* loop, tEvIo* io)
 
     if (pthread_self() != loop->tid)
     {
-        return _saveInterThreadAction(loop, io, EV_IO_STOP);
+        return _saveInterThreadAction(loop, io, EV_ACT_IO_STOP);
     }
 
     io->is_started = 0;
 
     struct epoll_event tmp = {};
-    int check = epoll_ctl(io->loop->epfd, EPOLL_CTL_DEL, io->fd, &tmp);
+    int check = epoll_ctl(loop->epfd, EPOLL_CTL_DEL, io->fd, &tmp);
 
-    tListStatus ret = list_remove(&loop->evlist, io);
+    loop->curr_ev_num--;
 
     check_if(check < 0, return EV_ERROR, "epoll_ctl EPOLL_CTL_DEL failed");
-    check_if(ret != LIST_OK, return EV_ERROR, "list_remove failed");
 
     return EV_OK;
 }
@@ -473,7 +467,7 @@ tEvStatus evsig_init(tEvSignal* sig, tEvCallback callback, int signum, void* arg
     sig->arg = arg;
     sig->callback = callback;
     sig->is_started = 0;
-    sig->action = EV_ACTION_INVALID;
+    sig->action = EV_ACT_INVALID;
     sig->signum = signum;
 
     sig->is_init = 1;
@@ -491,10 +485,10 @@ tEvStatus evsig_start(tEvLoop* loop, tEvSignal* sig)
 
     if (pthread_self() != loop->tid)
     {
-        return _saveInterThreadAction(loop, sig, EV_SIGNAL_START);
+        return _saveInterThreadAction(loop, sig, EV_ACT_SIGNAL_START);
     }
 
-    check_if(list_length(&loop->evlist) >= loop->max_ev_num, return EV_ERROR, "loop ev is full");
+    check_if(loop->curr_ev_num >= loop->max_ev_num, return EV_ERROR, "curr_ev_num = %d >= max_ev_num = %d", loop->curr_ev_num, loop->max_ev_num);
 
     sigset_t mask;
     sigemptyset(&mask);
@@ -508,15 +502,14 @@ tEvStatus evsig_start(tEvLoop* loop, tEvSignal* sig)
     sig->fd = signalfd(-1, &mask, 0);
     check_if(sig->fd <= 0, return EV_ERROR, "signalfd failed");
 
-    tListStatus list_ret = list_append(&loop->evlist, sig);
-    check_if(list_ret != LIST_OK, goto _ERROR, "list_append failed");
-
     struct epoll_event tmp = {
         .events = EPOLLIN,
         .data.ptr = sig,
     };
     check = epoll_ctl(loop->epfd, EPOLL_CTL_ADD, sig->fd, &tmp);
     check_if(check < 0, goto _ERROR, "epoll_ctl add failed");
+
+    loop->curr_ev_num++;
 
     sig->loop = loop;
     sig->is_started = 1;
@@ -528,10 +521,6 @@ _ERROR:
     {
         close(sig->fd);
         sig->fd = -1;
-    }
-    if (list_ret == LIST_OK)
-    {
-        list_remove(&loop->evlist, sig);
     }
     return EV_ERROR;
 }
@@ -546,7 +535,7 @@ tEvStatus evsig_stop(tEvLoop* loop, tEvSignal* sig)
 
     if (pthread_self() != loop->tid)
     {
-        return _saveInterThreadAction(loop, sig, EV_SIGNAL_STOP);
+        return _saveInterThreadAction(loop, sig, EV_ACT_SIGNAL_STOP);
     }
 
     // unblock the signal handling, give the control back to linux
@@ -556,14 +545,14 @@ tEvStatus evsig_stop(tEvLoop* loop, tEvSignal* sig)
     sigprocmask(SIG_UNBLOCK, &mask, NULL);
 
     struct epoll_event tmpev = {};
-    int check = epoll_ctl(sig->loop->epfd, EPOLL_CTL_DEL, sig->fd, &tmpev);
-    tListStatus ret = list_remove(&loop->evlist, sig);
+    int check = epoll_ctl(loop->epfd, EPOLL_CTL_DEL, sig->fd, &tmpev);
+
+    loop->curr_ev_num--;
 
     close(sig->fd);
     sig->fd = -1;
 
     check_if(check < 0, return EV_ERROR, "epoll_ctl EPOLL_CTL_DEL failed");
-    check_if(ret != LIST_OK, return EV_ERROR, "list_remove failed");
 
     return EV_OK;
 }
@@ -593,7 +582,7 @@ tEvStatus ev_once(tEvLoop* loop, tEvCallback callback, void* arg)
     /////////////////////////////////////////////
     if (pthread_self() != loop->tid)
     {
-        tEvStatus ret = _saveInterThreadAction(loop, once, EV_ONCE_ONCE);
+        tEvStatus ret = _saveInterThreadAction(loop, once, EV_ACT_ONCE);
         if (ret != EV_OK)
         {
             free(once);
@@ -602,16 +591,13 @@ tEvStatus ev_once(tEvLoop* loop, tEvCallback callback, void* arg)
         return EV_OK;
     }
 
-    check_if(list_length(&loop->evlist) >= loop->max_ev_num, return EV_ERROR, "loop ev is full");
-
     int ep_chk = -1;
     int wr_chk = -1;
 
+    check_if(loop->curr_ev_num >= loop->max_ev_num, goto _ERROR, "curr_ev_num = %d >= max_ev_num = %d", loop->curr_ev_num, loop->max_ev_num);
+
     once->fd = eventfd(0, 0);
     check_if(once->fd < 0, goto _ERROR, "eventfd failed");
-
-    tListStatus list_ret = list_append(&loop->evlist, once);
-    check_if(list_ret != LIST_OK, goto _ERROR, "list_append failed");
 
     struct epoll_event tmp = {
         .events = EPOLLIN,
@@ -633,10 +619,6 @@ _ERROR:
     if (ep_chk == 0)
     {
         epoll_ctl(loop->epfd, EPOLL_CTL_DEL, once->fd, &tmp);
-    }
-    if (list_ret == LIST_OK)
-    {
-        list_remove(&loop->evlist, once);
     }
     if (once)
     {
@@ -684,8 +666,10 @@ tEvStatus evtm_start(tEvLoop* loop, tEvTimer* tm)
 
     if (pthread_self() != loop->tid)
     {
-        return _saveInterThreadAction(loop, tm, EV_TIMER_START);
+        return _saveInterThreadAction(loop, tm, EV_ACT_TIMER_START);
     }
+
+    check_if(loop->curr_ev_num >= loop->max_ev_num, return EV_ERROR, "curr_ev_num = %d >= max_ev_num = %d", loop->curr_ev_num, loop->max_ev_num);
 
     tm->fd = timerfd_create(CLOCK_MONOTONIC, 0);
     check_if(tm->fd < 0, return EV_ERROR, "timerfd_create failed");
@@ -702,9 +686,6 @@ tEvStatus evtm_start(tEvLoop* loop, tEvTimer* tm)
         tm->rest_time.it_interval.tv_nsec = nsec;
     }
 
-    tListStatus list_ret = list_append(&loop->evlist, tm);
-    check_if(list_ret != LIST_OK, goto _ERROR, "list_append failed");
-
     int set_chk = timerfd_settime(tm->fd, 0, &tm->rest_time, NULL);
     check_if(set_chk < 0, goto _ERROR, "timerfd_settime failed");
 
@@ -716,16 +697,14 @@ tEvStatus evtm_start(tEvLoop* loop, tEvTimer* tm)
     int ep_chk = epoll_ctl(loop->epfd, EPOLL_CTL_ADD, tm->fd, &tmp);
     check_if(ep_chk < 0, goto _ERROR, "epoll_ctl add failed");
 
+    loop->curr_ev_num++;
+
     tm->loop = loop;
     tm->is_started = 1;
 
     return EV_OK;
 
 _ERROR:
-    if (list_ret == LIST_OK)
-    {
-        list_remove(&loop->evlist, tm);
-    }
     if (tm->fd > 0)
     {
         close(tm->fd);
@@ -745,7 +724,7 @@ tEvStatus evtm_stop(tEvLoop* loop, tEvTimer* tm)
 
     if (pthread_self() != loop->tid)
     {
-        return _saveInterThreadAction(loop, tm, EV_TIMER_STOP);
+        return _saveInterThreadAction(loop, tm, EV_ACT_TIMER_STOP);
     }
 
     tm->is_started = 0;
@@ -755,16 +734,15 @@ tEvStatus evtm_stop(tEvLoop* loop, tEvTimer* tm)
     int set_chk = timerfd_settime(tm->fd, 0, &tm->rest_time, NULL);
 
     struct epoll_event tmp = {};
-    int ep_chk = epoll_ctl(tm->loop->epfd, EPOLL_CTL_DEL, tm->fd, &tmp);
+    int ep_chk = epoll_ctl(loop->epfd, EPOLL_CTL_DEL, tm->fd, &tmp);
 
-    tListStatus list_ret = list_remove(&loop->evlist, tm);
+    loop->curr_ev_num--;
 
     close(tm->fd);
     tm->fd = -1;
 
     check_if(set_chk < 0, return EV_ERROR, "timerfd_settime failed");
     check_if(ep_chk < 0, return EV_ERROR, "epoll_ctl EPOLL_CTL_DEL failed");
-    check_if(list_ret != LIST_OK, return EV_ERROR, "list_remove failed");
 
     return EV_OK;
 }
@@ -780,7 +758,7 @@ tEvStatus evtm_pause(tEvLoop* loop, tEvTimer* tm)
 
     if (pthread_self() != loop->tid)
     {
-        return _saveInterThreadAction(loop, tm, EV_TIMER_PAUSE);
+        return _saveInterThreadAction(loop, tm, EV_ACT_TIMER_PAUSE);
     }
 
     struct itimerspec tmp = {};
@@ -807,14 +785,13 @@ tEvStatus evtm_resume(tEvLoop* loop, tEvTimer* tm)
 
     if (pthread_self() != loop->tid)
     {
-        return _saveInterThreadAction(loop, tm, EV_TIMER_RESUME);
+        return _saveInterThreadAction(loop, tm, EV_ACT_TIMER_RESUME);
     }
+
+    check_if(loop->curr_ev_num >= loop->max_ev_num, return EV_ERROR, "curr_ev_num = %d >= max_ev_num = %d", loop->curr_ev_num, loop->max_ev_num);
 
     tm->fd = timerfd_create(CLOCK_MONOTONIC, 0);
     check_if(tm->fd < 0, return EV_ERROR, "timerfd_create failed");
-
-    tListStatus list_ret = list_append(&loop->evlist, tm);
-    check_if(list_ret != LIST_OK, goto _ERROR, "list_append failed");
 
     int set_chk = timerfd_settime(tm->fd, 0, &tm->rest_time, NULL);
     check_if(set_chk < 0, goto _ERROR, "timerfd_settime failed");
@@ -827,16 +804,14 @@ tEvStatus evtm_resume(tEvLoop* loop, tEvTimer* tm)
     int ep_chk = epoll_ctl(loop->epfd, EPOLL_CTL_ADD, tm->fd, &tmp);
     check_if(ep_chk < 0, goto _ERROR, "epoll_ctl add failed");
 
+    loop->curr_ev_num++;
+
     tm->loop = loop;
     tm->is_started = 1;
 
     return EV_OK;
 
 _ERROR:
-    if (list_ret == LIST_OK)
-    {
-        list_remove(&loop->evlist, tm);
-    }
     if (tm->fd > 0)
     {
         close(tm->fd);
@@ -854,7 +829,7 @@ tEvStatus evtm_restart(tEvLoop* loop, tEvTimer* tm)
 
     if (pthread_self() != loop->tid)
     {
-        return _saveInterThreadAction(loop, tm, EV_TIMER_RESTART);
+        return _saveInterThreadAction(loop, tm, EV_ACT_TIMER_RESTART);
     }
 
     if (tm->is_started)

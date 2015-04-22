@@ -11,7 +11,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "basic.h"
-#include "list.h"
 #include "queue.h"
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -49,21 +48,21 @@ typedef enum
 
 typedef enum
 {
-    EV_ACTION_INVALID = 0,
+    EV_ACT_INVALID = 0,
 
-    EV_IO_START,
-    EV_IO_STOP,
+    EV_ACT_IO_START,
+    EV_ACT_IO_STOP,
 
-    EV_TIMER_START,
-    EV_TIMER_STOP,
-    EV_TIMER_PAUSE,
-    EV_TIMER_RESUME,
-    EV_TIMER_RESTART,
+    EV_ACT_TIMER_START,
+    EV_ACT_TIMER_STOP,
+    EV_ACT_TIMER_PAUSE,
+    EV_ACT_TIMER_RESUME,
+    EV_ACT_TIMER_RESTART,
 
-    EV_SIGNAL_START,
-    EV_SIGNAL_STOP,
+    EV_ACT_SIGNAL_START,
+    EV_ACT_SIGNAL_STOP,
 
-    EV_ONCE_ONCE,
+    EV_ACT_ONCE,
 
     EV_ACTIONS
 
@@ -73,13 +72,12 @@ typedef enum
 
 typedef struct tEvLoop
 {
-    tList evlist;
-
     int queue_fd;
     tQueue inter_thread_queue;
 
     int epfd;
     int max_ev_num;
+    int curr_ev_num;
 
     int is_init;
     int is_running;
@@ -152,6 +150,5 @@ tEvStatus evtm_stop(tEvLoop* loop, tEvTimer* tm);
 tEvStatus evtm_pause(tEvLoop* loop, tEvTimer* tm);
 tEvStatus evtm_resume(tEvLoop* loop, tEvTimer* tm);
 tEvStatus evtm_restart(tEvLoop* loop, tEvTimer* tm);
-
 
 #endif //_EVENTS_H_
