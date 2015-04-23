@@ -13,7 +13,7 @@ static void test_ipv4_mac_to_str(void)
     mac_to_str(mac, macstr, 30);
 
     dprint("ipstr = %s", ipstr);
-    dprint("macstr = %s", macstr);        
+    dprint("macstr = %s", macstr);
 }
 
 static void test_str_to_ipv4_mac(void)
@@ -133,7 +133,7 @@ static void test_bytes_to_uint(void)
     ptr = bytes;
 
     u8 = *ptr;
-    ptr += 1;    
+    ptr += 1;
     dprint("u8 = %d", u8);
 
     bytes_to_u16(ptr, u16);

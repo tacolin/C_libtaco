@@ -7,10 +7,6 @@
 
 ////////////////////////////////////////////////////////////////////////////////
 
-#define QUEUE_NAME_SIZE 20
-
-////////////////////////////////////////////////////////////////////////////////
-
 typedef enum
 {
     QUEUE_OK = 0,
@@ -36,8 +32,6 @@ typedef void (*tQueueContentCleanFn)(void* obj_content);
 
 typedef struct tQueue
 {
-    char name[QUEUE_NAME_SIZE+1];
-
     int max_obj_num;
     int curr_obj_num;
 
@@ -58,15 +52,15 @@ typedef struct tQueue
 
 ////////////////////////////////////////////////////////////////////////////////
 
-tQueueStatus queue_init(tQueue *queue, char* name, int max_queue_depth,
+tQueueStatus queue_init(tQueue *queue, int max_queue_depth,
                         tQueueContentCleanFn clean_func,
                         tQueueSuspend is_put_suspend,
                         tQueueSuspend is_get_suspend);
 
 void queue_clean(tQueue *queue);
 
-tQueueStatus queue_put(tQueue* queue, void* content);
-void* queue_get(tQueue* queue);
+tQueueStatus queue_push(tQueue* queue, void* content);
+void* queue_pop(tQueue* queue);
 
 int queue_length(tQueue* queue);
 

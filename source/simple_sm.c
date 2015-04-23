@@ -63,7 +63,7 @@ tSmStatus sm_init(tSm* sm, char* name, int max_ev_value)
     tTreeStatus tree_ret   = tree_init(&sm->st_tree, sm->root, _destroySt);
     check_if(tree_ret != TREE_OK, return SM_ERROR, "tree_init failed");
 
-    tQueueStatus queue_ret = queue_init(&sm->evqueue, sm->name, SM_MAX_EVQUEUE_NUM, free, QUEUE_UNSUSPEND, QUEUE_UNSUSPEND);
+    tQueueStatus queue_ret = queue_init(&sm->evqueue, SM_MAX_EVQUEUE_NUM, free, QUEUE_UNSUSPEND, QUEUE_UNSUSPEND);
     check_if(queue_ret != QUEUE_OK, return SM_ERROR, "queue_init failed");
 
     sm->is_busy    = 0;
@@ -461,7 +461,7 @@ tSmStatus sm_sendEv(tSm* sm, int evid, intptr_t arg1, intptr_t arg2)
         ev->evid = evid;
         ev->arg1 = arg1;
         ev->arg2 = arg2;
-        queue_put(&sm->evqueue, ev);
+        queue_push(&sm->evqueue, ev);
         return SM_OK;
     }
 
@@ -471,7 +471,7 @@ tSmStatus sm_sendEv(tSm* sm, int evid, intptr_t arg1, intptr_t arg2)
     _propogateEv(sm, sm->root, &tmpev);
 
     tSmEv* ev;
-    while (ev = queue_get(&sm->evqueue))
+    while (ev = queue_pop(&sm->evqueue))
     {
         _propogateEv(sm, sm->root, ev);
         free(ev);

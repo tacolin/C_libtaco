@@ -14,7 +14,7 @@ static void _unlock(tQueue* queue)
 
 ////////////////////////////////////////////////////////////////////////////////
 
-tQueueStatus queue_init(tQueue *queue, char* name, int max_queue_depth,
+tQueueStatus queue_init(tQueue *queue, int max_queue_depth,
                         tQueueContentCleanFn clean_fn,
                         tQueueSuspend is_put_suspend,
                         tQueueSuspend is_get_suspend)
@@ -36,11 +36,6 @@ tQueueStatus queue_init(tQueue *queue, char* name, int max_queue_depth,
 
     int chk = pthread_mutex_init(&(queue->lock), NULL);
     check_if(chk != 0, return QUEUE_ERROR, "pthread_mutext_init failed");
-
-    if (name)
-    {
-        snprintf(queue->name, QUEUE_NAME_SIZE, "%s", name);
-    }
 
     return QUEUE_OK;
 }
@@ -80,10 +75,10 @@ void queue_clean(tQueue *queue)
     return;
 }
 
-tQueueStatus queue_put(tQueue* queue, void* content)
+tQueueStatus queue_push(tQueue* queue, void* content)
 {
     check_if(queue == NULL, return QUEUE_ERROR, "queue is null");
-    check_if(content == NULL, return QUEUE_ERROR, "(%s) content is null", queue->name);
+    check_if(content == NULL, return QUEUE_ERROR, "content is null");
 
     if (queue->is_put_suspend == QUEUE_SUSPEND)
     {
@@ -94,7 +89,7 @@ tQueueStatus queue_put(tQueue* queue, void* content)
         if (queue->curr_obj_num >= queue->max_obj_num)
         {
             // queue is full
-            derror("(%s) queue is full (length = %d)", queue->name, queue_length(queue));
+            derror("queue is full (length = %d)", queue_length(queue));
             return QUEUE_ERROR;
         }
     }
@@ -128,7 +123,7 @@ tQueueStatus queue_put(tQueue* queue, void* content)
     return QUEUE_OK;
 }
 
-void* queue_get(tQueue* queue)
+void* queue_pop(tQueue* queue)
 {
     check_if(queue == NULL, return NULL, "queue is null");
 
@@ -141,19 +136,15 @@ void* queue_get(tQueue* queue)
         if (queue->curr_obj_num <= 0)
         {
             // queue is empty
-            check_if(queue->head, return NULL,
-                     "(%s) queue is empty but pHead exists", queue->name);
-            check_if(queue->tail, return NULL,
-                     "(%s) queue is empty but pTail exists", queue->name);
+            check_if(queue->head, return NULL, "queue is empty but pHead exists");
+            check_if(queue->tail, return NULL, "queue is empty but pTail exists");
 
             return NULL;
         }
     }
 
-    check_if(queue->head == NULL, return NULL,
-             "(%s) currentObjNum = %d, but pHead is NULL", queue->name, queue->curr_obj_num);
-    check_if(queue->tail == NULL, return NULL,
-             "(%s) currentObjNum = %d, but pTail is NULL", queue->name, queue->curr_obj_num);
+    check_if(queue->head == NULL, return NULL, "currentObjNum = %d, but pHead is NULL", queue->curr_obj_num);
+    check_if(queue->tail == NULL, return NULL, "currentObjNum = %d, but pTail is NULL", queue->curr_obj_num);
 
     _lock(queue);
 
