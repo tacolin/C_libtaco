@@ -45,9 +45,8 @@ tMapStatus map_init(tMap* map, tMapContentCleanFn cleanfn);
 tMapStatus map_uninit(tMap* map);
 
 tMapStatus map_add(tMap* map, void* content, unsigned int* pid);
-tMapStatus map_delete(tMap* map, unsigned int id, void** pcontent);
 
 void* map_grab(tMap* map, unsigned int id);
-tMapStatus map_release(tMap* map, unsigned int id);
+void* map_release(tMap* map, unsigned int id);
 
 #endif //_MAP_H_

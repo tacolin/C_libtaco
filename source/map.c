@@ -43,6 +43,8 @@ tMapStatus _expandMap(tMap* map)
     return MAP_OK;
 }
 
+
+
 ////////////////////////////////////////////////////////////////////////////////
 
 tMapStatus map_init(tMap* map, tMapContentCleanFn cleanfn)
@@ -138,7 +140,7 @@ tMapStatus map_add(tMap* map, void* content, unsigned int* pid)
         {
             // find a empty slot
             slot->id = tmpid;
-            slot->ref = 0;
+            slot->ref = 1;
             slot->content = content;
             map->num++;
 
@@ -158,12 +160,11 @@ _ERROR:
     return MAP_ERROR;
 }
 
-tMapStatus map_delete(tMap* map, unsigned int id, void** pcontent)
+static void* _tryDelete(tMap* map, unsigned int id)
 {
-    check_if(map == NULL, return MAP_ERROR, "map is null");
-    check_if(id == 0, return MAP_ERROR, "id = %d invalid", id);
-    check_if(pcontent == NULL, return MAP_ERROR, "pcontent is null");
-    check_if(map->is_init != 1, return MAP_ERROR, "map is not init yet");
+    check_if(map == NULL, return NULL, "map is null");
+    check_if(map->is_init != 1, return NULL, "map is not init yet");
+    check_if(id == 0, return NULL, "id = %d invalid", id);
 
     rwlock_enterWrite(&map->rwlock);
 
@@ -171,7 +172,7 @@ tMapStatus map_delete(tMap* map, unsigned int id, void** pcontent)
     check_if(slot->id != id, goto _ERROR, "id = %d not exist in map", id);
     check_if(slot->ref > 0, goto _ERROR, "id = %d slot ref = %d", id , slot->ref);
 
-    *pcontent = slot->content;
+    void* content = slot->content;
 
     slot->content = NULL;
     slot->id = 0;
@@ -179,11 +180,11 @@ tMapStatus map_delete(tMap* map, unsigned int id, void** pcontent)
     map->num--;
 
     rwlock_exitWrite(&map->rwlock);
-    return MAP_OK;
+    return content;
 
 _ERROR:
     rwlock_exitWrite(&map->rwlock);
-    return MAP_ERROR;
+    return NULL;
 }
 
 void* map_grab(tMap* map, unsigned int id)
@@ -208,11 +209,11 @@ _END:
     return ret;
 }
 
-tMapStatus map_release(tMap* map, unsigned int id)
+static void* _releaseRef(tMap* map, unsigned int id)
 {
-    check_if(map == NULL, return MAP_ERROR, "map is null");
-    check_if(map->is_init != 1, return MAP_ERROR, "map is not init yet");
-    check_if(id == 0, return MAP_ERROR, "id = %d invalid", id);
+    check_if(map == NULL, return NULL, "map is null");
+    check_if(map->is_init != 1, return NULL, "map is not init yet");
+    check_if(id == 0, return NULL, "id = %d invalid", id);
 
     rwlock_enterRead(&map->rwlock);
 
@@ -221,10 +222,26 @@ tMapStatus map_release(tMap* map, unsigned int id)
 
     if (slot->ref > 0) DEC_REF(slot->ref);
 
+    void* content = slot->content;
+
     rwlock_exitRead(&map->rwlock);
-    return MAP_OK;
+    return content;
 
 _ERROR:
     rwlock_exitRead(&map->rwlock);
-    return MAP_ERROR;
+    return NULL;
+}
+
+void* map_release(tMap* map, unsigned int id)
+{
+    check_if(map == NULL, return NULL, "map is null");
+    check_if(map->is_init != 1, return NULL, "map is not init yet");
+    check_if(id == 0, return NULL, "id = %d invalid", id);
+
+    if (NULL == _releaseRef(map, id))
+    {
+        return NULL;
+    }
+
+    return _tryDelete(map, id);
 }

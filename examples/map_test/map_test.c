@@ -72,14 +72,14 @@ static void _createRoutine(void* task, void* arg)
         r = rand() % (i+1);
         tmpid = _idPool[r];
 
-        ret = map_delete(map, tmpid, &ptr);
-        if (ret == MAP_OK)
+        ptr = map_release(map, tmpid);
+        if (ptr)
         {
-            dprint("delete %d ok id = %u ptr = %p", i, tmpid, ptr);
+            dprint("release %d ok id = %u ptr = %p", i, tmpid, ptr);
         }
         else
         {
-            dprint("delete %d failed id = %u", i, tmpid);
+            dprint("release %d failed id = %u", i, tmpid);
         }
     }
 
