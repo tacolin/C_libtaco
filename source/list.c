@@ -264,7 +264,7 @@ tListStatus list_insertToObj(tList* list, tListObj* target_obj, void* content)
     check_if(_checkList(list) != LIST_OK, return LIST_ERROR, "_checkList failed");
     check_if(target_obj == NULL, return LIST_ERROR, "target_obj is null");
     check_if(list_find(list, NULL, content) != NULL, return LIST_ERROR, "content is already in list");
-    check_if(list_find(list, NULL, target_obj->content) == NULL, return LIST_ERROR, "target_obj is not in list");
+    check_if(list_findObj(list, NULL, target_obj) == NULL, return LIST_ERROR, "target_obj is not in list");
 
     if (target_obj->prev)
     {
@@ -301,7 +301,7 @@ tListStatus list_appendToObj(tList* list, tListObj* target_obj, void* content)
     check_if(content == NULL, return LIST_ERROR, "content is null");
     check_if(_checkList(list) != LIST_OK, return LIST_ERROR, "_checkList failed");
     check_if(list_find(list, NULL, content) != NULL, return LIST_ERROR, "content is already in list");
-    check_if(list_find(list, NULL, target_obj->content) == NULL, return LIST_ERROR, "target_obj is not in list");
+    check_if(list_findObj(list, NULL, target_obj) == NULL, return LIST_ERROR, "target_obj is not in list");
 
     if (target_obj->next)
     {

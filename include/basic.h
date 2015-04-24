@@ -13,7 +13,7 @@
 
 ////////////////////////////////////////////////////////////////////////////////
 
-#define dtrace() do { struct timeval _now = {}; gettimeofday(&_now, NULL); fprintf(stdout, "(%3lds,%3ldms), tid = %ld, line %4d, %s()\n", _now.tv_sec % 1000, _now.tv_usec/1000, pthread_self(), __LINE__, __func__); } while(0)
+#define dtrace() do { struct timeval _now = {}; gettimeofday(&_now, NULL); fprintf(stdout, "(%3lds,%3ldms), tid = %lu, line %4d, %s()\n", _now.tv_sec % 1000, _now.tv_usec/1000, (unsigned long)pthread_self(), __LINE__, __func__); } while(0)
 #define dprint(a, b...) fprintf(stdout, "%s(): "a"\n", __func__, ##b)
 #define derror(a, b...) fprintf(stderr, "[ERROR] %s(): "a"\n", __func__, ##b)
 
