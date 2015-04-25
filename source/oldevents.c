@@ -3,6 +3,7 @@
 #include "list.h"
 
 #include <unistd.h>
+#include <string.h>
 #include <pthread.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -202,7 +203,8 @@ struct tmfd_rec
 };
 
 static pthread_mutex_t _tmfd_lock;
-static tList _tmfd_list;
+static tList _tmfd_running_list;
+static tList _tmfd_stopped_list;
 
 static pthread_t _tick_thread;
 static int _tick_running = 0;
@@ -228,11 +230,48 @@ static void _cleanTmFdRec(void* content)
     return;
 }
 
+static void _addRecToRunningList(struct tmfd_rec* rec)
+{
+    check_if(rec == NULL, return, "rec is null");
+
+    long total_ms = 0;
+    struct tmfd_rec* target;
+    void* obj;
+    LIST_FOREACH(&_tmfd_running_list, obj, target)
+    {
+        if ((total_ms + target->rest_ms) > rec->rest_ms)
+        {
+            break;
+        }
+        total_ms += target->rest_ms;
+    }
+
+    rec->rest_ms -= total_ms;
+    if (target)
+    {
+        list_insertTo(&_tmfd_running_list, target, rec);
+        dprint("target->tmfd = %d", target->tmfd);
+
+        tListObj* obj = list_findObj(&_tmfd_running_list, NULL, target);
+        for (; obj; obj = list_nextObj(&_tmfd_running_list, obj))
+        {
+            target = obj->content;
+            target->rest_ms -= rec->rest_ms;
+        }
+    }
+    else
+    {
+        // add to tail
+        list_append(&_tmfd_running_list, rec);
+    }
+    return;
+}
+
 static void* _tickRoutine(void* arg)
 {
     struct timeval period;
     struct tmfd_rec* rec;
-    void* obj;
+    tListObj* obj;
     uint64_t dummy;
     ssize_t  dummy_size = sizeof(dummy);
 
@@ -244,29 +283,30 @@ static void* _tickRoutine(void* arg)
         select(0, 0, 0, 0, &period);
 
         pthread_mutex_lock(&_tmfd_lock);
-        LIST_FOREACH(&_tmfd_list, obj, rec)
+        while (rec = list_head(&_tmfd_running_list))
         {
+            rec->rest_ms -= TM_TICK_MS;
             if (rec->rest_ms > 0)
             {
-                rec->rest_ms -= TM_TICK_MS;
+                break;
+            }
 
-                if (rec->rest_ms <= 0)
-                {
-                    dummy = 1;
-                    write(rec->fdpair[1], &dummy, dummy_size);
+            dummy = 1;
+            write(rec->fdpair[1], &dummy, dummy_size);
 
-                    if ((rec->value.it_interval.tv_sec > 0) || (rec->value.it_interval.tv_nsec > 0))
-                    {
-                        // periodic timer
-                        rec->rest_ms = rec->value.it_interval.tv_sec * 1000;
-                        rec->rest_ms += rec->value.it_interval.tv_nsec / (1000*1000);
-                    }
-                    else
-                    {
-                        // once timer
-                        rec->rest_ms = 0;
-                    }
-                }
+            list_remove(&_tmfd_running_list, rec);
+
+            if ((rec->value.it_interval.tv_sec > 0) || (rec->value.it_interval.tv_nsec > 0))
+            {
+                // periodic timer
+                rec->rest_ms = rec->value.it_interval.tv_sec * 1000;
+                rec->rest_ms += rec->value.it_interval.tv_nsec / (1000*1000);
+                _addRecToRunningList(rec);
+            }
+            else
+            {
+                rec->rest_ms = 0;
+                list_append(&_tmfd_stopped_list, rec);
             }
         }
         pthread_mutex_unlock(&_tmfd_lock);
@@ -279,7 +319,8 @@ static void* _tickRoutine(void* arg)
 int tmfd_init(void)
 {
     pthread_mutex_init(&_tmfd_lock, NULL);
-    list_init(&_tmfd_list, _cleanTmFdRec);
+    list_init(&_tmfd_running_list, _cleanTmFdRec);
+    list_init(&_tmfd_stopped_list, _cleanTmFdRec);
 
     _tick_running = 1;
     pthread_create(&_tick_thread, NULL, _tickRoutine, NULL);
@@ -292,7 +333,8 @@ void tmfd_uninit(void)
     pthread_join(_tick_thread, NULL);
 
     pthread_mutex_lock(&_tmfd_lock);
-    list_clean(&_tmfd_list);
+    list_clean(&_tmfd_running_list);
+    list_clean(&_tmfd_stopped_list);
     pthread_mutex_unlock(&_tmfd_lock);
     pthread_mutex_destroy(&_tmfd_lock);
     return;
@@ -313,7 +355,8 @@ int tmfd_create(int clockid, int flags)
     rec->fdpair[1] = fdpair[1];
     rec->rest_ms = 0;
 
-    list_append(&_tmfd_list, rec);
+    list_append(&_tmfd_stopped_list, rec);
+    dprint("tmfd = %d, ok", rec->tmfd);
     return fdpair[0];
 }
 
@@ -323,22 +366,42 @@ int tmfd_settime(int tmfd, int flags, const struct itmspec *new_value, struct it
     check_if(new_value == NULL, return -1, "new_value is null");
 
     pthread_mutex_lock(&_tmfd_lock);
-    struct tmfd_rec* rec = (struct tmfd_rec*)list_find(&_tmfd_list, _findTmFd, &tmfd);
+    struct tmfd_rec* rec;
+    tList* origin_list;
+
+    // rec in stopped list ?
+    origin_list = &_tmfd_stopped_list;
+    rec = list_find(origin_list, _findTmFd, &tmfd);
     if (rec == NULL)
     {
-        derror("find no tmfd_rec with tmfd = %d", tmfd);
-        pthread_mutex_unlock(&_tmfd_lock);
-        return -1;
+        origin_list = &_tmfd_running_list;
+        // rec in running list ?
+        rec = list_find(origin_list, _findTmFd, &tmfd);
+        check_if(rec == NULL, goto _ERROR, "find no tmfd_rec with tmfd = %d", tmfd);
+    }
+    list_remove(origin_list, rec);
+
+    rec->value   = *new_value;
+
+    // if new value is 0, add to stopped list
+    long sum = new_value->it_value.tv_sec + new_value->it_value.tv_nsec + new_value->it_interval.tv_sec + new_value->it_interval.tv_nsec;
+    if (sum == 0)
+    {
+        list_append(&_tmfd_stopped_list, rec);
+        goto _END;
     }
 
     rec->rest_ms = new_value->it_value.tv_sec * 1000 + new_value->it_value.tv_nsec / (1000*1000);
-    rec->value = *new_value;
 
-    list_remove(&_tmfd_list, rec);
-    list_append(&_tmfd_list, rec);
+    _addRecToRunningList(rec);
 
+_END:
     pthread_mutex_unlock(&_tmfd_lock);
     return 0;
+
+_ERROR:
+    pthread_mutex_unlock(&_tmfd_lock);
+    return -1;
 }
 
 int tmfd_gettime(int tmfd, struct itmspec *old_value)
@@ -347,31 +410,52 @@ int tmfd_gettime(int tmfd, struct itmspec *old_value)
     check_if(old_value == NULL, return -1, "old_value is null");
 
     pthread_mutex_lock(&_tmfd_lock);
-    struct tmfd_rec* rec = (struct tmfd_rec*)list_find(&_tmfd_list, _findTmFd, &tmfd);
+    struct tmfd_rec* rec;
+
+    rec = list_find(&_tmfd_running_list, _findTmFd, &tmfd);
     if (rec == NULL)
     {
-        derror("find no tmfd_rec with tmfd = %d", tmfd);
-        pthread_mutex_unlock(&_tmfd_lock);
-        return -1;
+        rec = list_find(&_tmfd_stopped_list, _findTmFd, &tmfd);
+        check_if(rec == NULL, goto _ERROR, "find no tmfd_rec with tmfd = %d", tmfd);
+
+        memset(old_value, 0, sizeof(struct itmspec));
+        goto _END;
     }
 
     old_value->it_value.tv_sec = rec->rest_ms / 1000;
     old_value->it_value.tv_nsec = (rec->rest_ms % 1000) * 1000 * 1000;
     old_value->it_interval = rec->value.it_interval;
+
+_END:
     pthread_mutex_unlock(&_tmfd_lock);
     return 0;
+
+_ERROR:
+    pthread_mutex_unlock(&_tmfd_lock);
+    return -1;
 }
 
 void tmfd_close(int tmfd)
 {
     pthread_mutex_lock(&_tmfd_lock);
-    struct tmfd_rec* rec = (struct tmfd_rec*)list_find(&_tmfd_list, _findTmFd, &tmfd);
+
+    struct tmfd_rec* rec;
+    rec = list_find(&_tmfd_running_list, _findTmFd, &tmfd);
     if (rec)
     {
-        list_remove(&_tmfd_list, rec);
+        list_remove(&_tmfd_running_list, rec);
         _cleanTmFdRec(rec);
     }
+    else
+    {
+        rec = list_find(&_tmfd_stopped_list, _findTmFd, &tmfd);
+        if (rec)
+        {
+            list_remove(&_tmfd_stopped_list, rec);
+            _cleanTmFdRec(rec);
+        }
+    }
+
     pthread_mutex_unlock(&_tmfd_lock);
     return;
 }
-

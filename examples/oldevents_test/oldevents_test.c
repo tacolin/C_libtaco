@@ -148,6 +148,9 @@ int main(int argc, char const *argv[])
 
     struct fpoll_event evbuf[10] = {0};
 
+    int event_tm[10];
+    int j;
+
     while (_running)
     {
         int num = fpoll_wait(fpd, evbuf, 10, 10);
@@ -181,7 +184,33 @@ int main(int argc, char const *argv[])
                     tmfd_settime(tm2, 0, &tmp, NULL);
                     dprint("stop tm2");
                     tm2_count = 0;
+
+                    for (j=0; j<10; j++)
+                    {
+                        event_tm[j] = tmfd_create(TM_CLOCK_MONOTONIC, 0);
+
+                        struct fpoll_event local_ev = {
+                            .events = FPOLLIN,
+                            .data.fd = event_tm[j],
+                        };
+
+                        fpoll_ctl(fpd, FPOLL_CTL_ADD, event_tm[j], &local_ev);
+
+                        tmp.it_value.tv_nsec = 100;
+                        tmfd_settime(event_tm[j], 0, &tmp, NULL);
+
+                        dprint("create fd = %d", event_tm[j]);
+                        dtrace();
+                    }
                 }
+            }
+            else
+            {
+                uint64_t dummy;
+                ssize_t dummy_size = sizeof(dummy);
+                read(evbuf[i].data.fd, &dummy, dummy_size);
+                dprint("other fd = %d", evbuf[i].data.fd);
+                dtrace();
             }
         }
     }
