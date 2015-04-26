@@ -21,6 +21,14 @@ static void _processStdin(int fd)
     {
         _running = 0;
     }
+    else if (strcmp(buf, "start tm1") == 0)
+    {
+        struct itmfdspec timeval = {};
+
+        timeval.it_value.tv_sec = 5;
+        tmfd_settime(_tm1, 0, &timeval, NULL);
+        dtrace();
+    }
     else if (strcmp(buf, "start tm2") == 0)
     {
         struct itmfdspec timeval = {};
@@ -29,6 +37,7 @@ static void _processStdin(int fd)
         timeval.it_interval.tv_nsec = 500 * 1000 * 1000;
         
         tmfd_settime(_tm2, 0, &timeval, NULL);
+        dtrace();
     }
     else
     {
