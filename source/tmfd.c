@@ -34,8 +34,8 @@ static int _is_running = 0;
 
 static tListBool _findTmFd(void* content, void* arg)
 {
-    check_if(content == NULL, return, "content is null");
-    check_if(arg == NULL, return, "arg is null");
+    check_if(content == NULL, return LIST_FALSE, "content is null");
+    check_if(arg == NULL, return LIST_FALSE, "arg is null");
 
     tTmfdRec* rec = (tTmfdRec*)content;
     int tmfd = *((int*)arg);
