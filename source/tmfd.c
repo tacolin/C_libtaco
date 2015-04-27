@@ -93,7 +93,6 @@ static void* _tickRoutine(void* arg)
 {
     struct timeval period;
     tTmfdRec* rec;
-    tListObj* obj;
     uint64_t dummy;
     ssize_t  dummy_size = sizeof(dummy);
 
@@ -105,7 +104,7 @@ static void* _tickRoutine(void* arg)
         select(0, 0, 0, 0, &period);
 
         pthread_mutex_lock(&_tmfd_lock);
-        while (rec = list_head(&_running_list))
+        while ((rec = list_head(&_running_list)) != NULL)
         {
             rec->tick -= TMFD_TICK_MS;
             if (rec->tick > 0)
