@@ -10,14 +10,10 @@
 
 #define TASK_NAME_SIZE 20
 
+#define TASK_OK (0)
+#define TASK_FAIL (-1)
+
 ////////////////////////////////////////////////////////////////////////////////
-
-typedef enum
-{
-    TASK_OK = 0,
-    TASK_ERROR = -1
-
-} tTaskStatus;
 
 typedef enum
 {
@@ -62,13 +58,13 @@ typedef struct tTask
 
 ////////////////////////////////////////////////////////////////////////////////
 
-tTaskStatus task_init(tTask* task, char* name, tTaskRoutineFn routine_fn,
+int task_init(tTask* task, char* name, tTaskRoutineFn routine_fn,
                       void* arg, tTaskPriority priority, tTaskType type);
 
-tTaskStatus task_start(tTask* task);
+int task_start(tTask* task);
 void task_stop(tTask* task);
 
-tTaskStatus task_system_init(void);
-tTaskStatus task_system_uninit(void);
+int task_system_init(void);
+int task_system_uninit(void);
 
 #endif //_TASK_H_

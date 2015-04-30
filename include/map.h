@@ -6,12 +6,8 @@
 
 ////////////////////////////////////////////////////////////////////////////////
 
-typedef enum
-{
-    MAP_OK = 0,
-    MAP_ERROR = -1
-
-} tMapStatus;
+#define MAP_OK (0)
+#define MAP_FAIL (-1)
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -41,10 +37,10 @@ typedef struct tMap
 
 ////////////////////////////////////////////////////////////////////////////////
 
-tMapStatus map_init(tMap* map, tMapContentCleanFn cleanfn);
-tMapStatus map_uninit(tMap* map);
+int map_init(tMap* map, tMapContentCleanFn cleanfn);
+int map_uninit(tMap* map);
 
-tMapStatus map_add(tMap* map, void* content, unsigned int* pid);
+int map_add(tMap* map, void* content, unsigned int* pid);
 
 void* map_grab(tMap* map, unsigned int id);
 void* map_release(tMap* map, unsigned int id);

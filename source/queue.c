@@ -14,13 +14,13 @@ static void _unlock(tQueue* queue)
 
 ////////////////////////////////////////////////////////////////////////////////
 
-tQueueStatus queue_init(tQueue *queue, int max_queue_depth,
+int queue_init(tQueue *queue, int max_queue_depth,
                         tQueueContentCleanFn clean_fn,
                         tQueueSuspend is_put_suspend,
                         tQueueSuspend is_get_suspend)
 {
-    check_if(queue == NULL, return QUEUE_ERROR, "queue is null");
-    check_if(max_queue_depth <= 0, return QUEUE_ERROR,
+    check_if(queue == NULL, return QUEUE_FAIL, "queue is null");
+    check_if(max_queue_depth <= 0, return QUEUE_FAIL,
              "max_queue_depth is %d", max_queue_depth);
 
     queue->max_obj_num    = max_queue_depth;
@@ -35,7 +35,7 @@ tQueueStatus queue_init(tQueue *queue, int max_queue_depth,
     sem_init(&(queue->empty_sem), 0, max_queue_depth);
 
     int chk = pthread_mutex_init(&(queue->lock), NULL);
-    check_if(chk != 0, return QUEUE_ERROR, "pthread_mutext_init failed");
+    check_if(chk != 0, return QUEUE_FAIL, "pthread_mutext_init failed");
 
     return QUEUE_OK;
 }
@@ -75,10 +75,10 @@ void queue_clean(tQueue *queue)
     return;
 }
 
-tQueueStatus queue_push(tQueue* queue, void* content)
+int queue_push(tQueue* queue, void* content)
 {
-    check_if(queue == NULL, return QUEUE_ERROR, "queue is null");
-    check_if(content == NULL, return QUEUE_ERROR, "content is null");
+    check_if(queue == NULL, return QUEUE_FAIL, "queue is null");
+    check_if(content == NULL, return QUEUE_FAIL, "content is null");
 
     if (queue->is_put_suspend == QUEUE_SUSPEND)
     {
@@ -90,7 +90,7 @@ tQueueStatus queue_push(tQueue* queue, void* content)
         {
             // queue is full
             derror("queue is full (length = %d)", queue_length(queue));
-            return QUEUE_ERROR;
+            return QUEUE_FAIL;
         }
     }
 

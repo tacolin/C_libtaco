@@ -12,19 +12,15 @@
 
 ////////////////////////////////////////////////////////////////////////////////
 
+#define HASH_OK (0)
+#define HASH_FAIL (-1)
+
 #define HASH_FOREACH(ptable, key, value) \
     for(key = hash_first_key(ptable), value = hash_find(ptable, key); \
         key && value; \
         key = hash_next_key(ptable, key), value = hash_find(ptable, key))
 
 ////////////////////////////////////////////////////////////////////////////////
-
-typedef enum
-{
-    HASH_OK = 0,
-    HASH_ERROR = -1
-
-} tHashStatus;
 
 typedef void (*tHashValueCleanFn)(void* value);
 
@@ -43,12 +39,12 @@ typedef struct tHashTable
 
 ////////////////////////////////////////////////////////////////////////////////
 
-tHashStatus hash_init(tHashTable* tbl, int max_num, tHashValueCleanFn cleanfn);
-tHashStatus hash_uninit(tHashTable* tbl);
+int hash_init(tHashTable* tbl, int max_num, tHashValueCleanFn cleanfn);
+int hash_uninit(tHashTable* tbl);
 
-tHashStatus hash_add(tHashTable *tbl, char* key, void* value);
-tHashStatus hash_del(tHashTable *tbl, char* key, void** pvalue);
-tHashStatus hash_modify(tHashTable* tbl, char* key, void* value);
+int hash_add(tHashTable *tbl, char* key, void* value);
+int hash_del(tHashTable *tbl, char* key, void** pvalue);
+int hash_modify(tHashTable* tbl, char* key, void* value);
 
 void* hash_find(tHashTable *tbl, char* key);
 int   hash_contains(tHashTable *tbl, char* key);

@@ -28,7 +28,7 @@ static void _grabRoutine(void* task, void* arg)
     int r;
     unsigned int tmpid;
     void* ptr;
-    tMapStatus ret;
+    int ret;
     for (i=0; i<MAX_ID_NUM; i++)
     {
         r = rand() % (i+1);
@@ -60,7 +60,7 @@ static void _createRoutine(void* task, void* arg)
     int r;
     unsigned int tmpid;
     void* ptr;
-    tMapStatus ret;
+    int ret;
 
     for (i=0; i<MAX_ID_NUM; i++)
     {

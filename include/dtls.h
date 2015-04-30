@@ -18,14 +18,10 @@
 #define DTLS_PATH_SIZE 108
 #define DTLS_PORT_ANY -1
 
+#define DTLS_OK (0)
+#define DTLS_FAIL (-1)
+
 ////////////////////////////////////////////////////////////////////////////////
-
-typedef enum
-{
-    DTLS_OK = 0,
-    DTLS_ERROR = -1,
-
-} tDtlsStatus;
 
 typedef struct tDtlsAddr
 {
@@ -72,25 +68,25 @@ typedef struct tDtls
 
 ////////////////////////////////////////////////////////////////////////////////
 
-tDtlsStatus dtls_toSockAddr(tDtlsAddr dtls_addr, struct sockaddr_in* sock_addr);
+int dtls_toSockAddr(tDtlsAddr dtls_addr, struct sockaddr_in* sock_addr);
 
-tDtlsStatus dtls_toDtlsAddr(struct sockaddr_in sock_addr, tDtlsAddr* dtls_addr);
+int dtls_toDtlsAddr(struct sockaddr_in sock_addr, tDtlsAddr* dtls_addr);
 
-tDtlsStatus dtls_server_init(tDtlsServer* server,
+int dtls_server_init(tDtlsServer* server,
                              char* local_ip, int local_port,
                              char* cert_path, char* key_path, int timeout_sec);
-tDtlsStatus dtls_server_uninit(tDtlsServer* server);
-tDtlsStatus dtls_server_accept(tDtlsServer* server, tDtls* dtls);
+int dtls_server_uninit(tDtlsServer* server);
+int dtls_server_accept(tDtlsServer* server, tDtls* dtls);
 
-tDtlsStatus dtls_client_init(tDtls* dtls, char* remote_ip, int remote_port,
+int dtls_client_init(tDtls* dtls, char* remote_ip, int remote_port,
                              int local_port, char* cert_path, char* key_path,
                              int timeout_sec);
-tDtlsStatus dtls_client_uninit(tDtls* dtls);
+int dtls_client_uninit(tDtls* dtls);
 
 int dtls_recv(tDtls* dtls, void* buffer, int buffer_size);
 int dtls_send(tDtls* dtls, void* data, int data_len);
 
-// tDtlsStatus dtls_system_init(void);
+// int dtls_system_init(void);
 // void dtls_system_uninit(void);
 
 #endif //_DTLS_H_

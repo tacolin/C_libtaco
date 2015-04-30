@@ -5,12 +5,12 @@
 
 #include "basic.h"
 
-typedef enum
-{
-    RB_OK = 0,
-    RB_ERROR = -1
+////////////////////////////////////////////////////////////////////////////////
 
-} tRbStatus;
+#define RB_OK (0)
+#define RB_FAIL (-1)
+
+////////////////////////////////////////////////////////////////////////////////
 
 typedef struct tRingBuf
 {
@@ -27,20 +27,22 @@ typedef struct tRingBuf
 
 } tRingBuf;
 
-tRbStatus ringbuf_init(tRingBuf* rb, int rb_size, int elem_size, void* elements);
-tRbStatus ringbuf_uninit(tRingBuf* rb);
+////////////////////////////////////////////////////////////////////////////////
 
-tRbStatus ringbuf_write(tRingBuf* rb, void* input);
-tRbStatus ringbuf_read(tRingBuf* rb, void* output);
+int ringbuf_init(tRingBuf* rb, int rb_size, int elem_size, void* elements);
+int ringbuf_uninit(tRingBuf* rb);
+
+int ringbuf_write(tRingBuf* rb, void* input);
+int ringbuf_read(tRingBuf* rb, void* output);
 
 int ringbuf_isEmpty(tRingBuf* rb); // yes : return 1(true), no return 0(false)
 int ringbuf_isFull(tRingBuf* rb); // yes : return 1(true), no return 0(false)
 
 void* ringbuf_preRead(tRingBuf* rb);
-tRbStatus ringbuf_postRead(tRingBuf* rb);
+int ringbuf_postRead(tRingBuf* rb);
 
 void* ringbuf_preWrite(tRingBuf* rb);
-tRbStatus ringbuf_postWrite(tRingBuf* rb);
+int ringbuf_postWrite(tRingBuf* rb);
 
 void* ringbuf_tail(tRingBuf* rb);
 void* ringbuf_prev(tRingBuf* rb, void* elem);

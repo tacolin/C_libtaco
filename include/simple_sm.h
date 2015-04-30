@@ -7,25 +7,23 @@
 
 #include <stdint.h>
 
+////////////////////////////////////////////////////////////////////////////////
+
+#define SM_OK (0)
+#define SM_FAIL (-1)
+
 #define SM_NAME_SIZE 100
 #define SM_MAX_EVQUEUE_NUM 100
 
 ////////////////////////////////////////////////////////////////////////////////
 
-typedef enum
-{
-    SM_OK = 0,
-    SM_ERROR = -1
-
-} tSmStatus;
-
 struct tSmEv;
 struct tSmSt;
 struct tSm;
 
-typedef tSmStatus (*tSmStEntryFn)(struct tSm* sm, struct tSmSt* state);
-typedef tSmStatus (*tSmStExitFn)(struct tSm* sm, struct tSmSt* state);
-typedef tSmStatus (*tSmTransAction)(struct tSm* sm, struct tSmEv* ev);
+typedef int (*tSmStEntryFn)(struct tSm* sm, struct tSmSt* state);
+typedef int (*tSmStExitFn)(struct tSm* sm, struct tSmSt* state);
+typedef int (*tSmTransAction)(struct tSm* sm, struct tSmEv* ev);
 typedef int8_t (*tSmGuardFn)(struct tSm* sm, struct tSmSt* state, struct tSmEv* ev);
 
 typedef struct tSmEv
@@ -97,22 +95,22 @@ typedef struct tSm
 
 ////////////////////////////////////////////////////////////////////////////////
 
-tSmStatus sm_init(tSm* sm, char* name, int max_ev_value);
-tSmStatus sm_uninit(tSm* sm);
+int sm_init(tSm* sm, char* name, int max_ev_value);
+int sm_uninit(tSm* sm);
 
-tSmStatus sm_setDb(tSm* sm, void* db);
+int sm_setDb(tSm* sm, void* db);
 
 tSmSt* sm_rootSt(tSm* sm);
 
 tSmSt* sm_createSt(tSm* sm, char* name, tSmStEntryFn on_entry, tSmStExitFn on_exit);
-tSmStatus sm_addSt(tSm* sm, tSmSt* parent_st, tSmSt* child_st, int is_init_state);
+int sm_addSt(tSm* sm, tSmSt* parent_st, tSmSt* child_st, int is_init_state);
 
 tSmTrans* sm_createTrans(tSm* sm, int evid, tSmGuardFn on_guard, int8_t guard_value, char* next_st_name, tSmTransAction on_act);
-tSmStatus sm_addTrans(tSm* sm, tSmSt* start_st, tSmTrans* trans);
+int sm_addTrans(tSm* sm, tSmSt* start_st, tSmTrans* trans);
 
-tSmStatus sm_start(tSm* sm);
-tSmStatus sm_stop(tSm* sm);
+int sm_start(tSm* sm);
+int sm_stop(tSm* sm);
 
-tSmStatus sm_sendEv(tSm* sm, int evid, intptr_t arg1, intptr_t arg2);
+int sm_sendEv(tSm* sm, int evid, intptr_t arg1, intptr_t arg2);
 
 #endif //_SIMPLE_SM_H_

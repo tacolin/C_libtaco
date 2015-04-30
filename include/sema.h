@@ -6,20 +6,18 @@
 
 ////////////////////////////////////////////////////////////////////////////////
 
-typedef enum
-{
-    SEM_OK = 0,
-    SEM_ERROR = -1
+#define SEM_OK (0)
+#define SEM_FAIL (-1)
 
-} tSemStatus;
+////////////////////////////////////////////////////////////////////////////////
 
 typedef sem_t tSem;
 
 ////////////////////////////////////////////////////////////////////////////////
 
-static inline tSemStatus sema_init(tSem *sem, int count)
+static inline int sema_init(tSem *sem, int count)
 {
-    check_if(sem == NULL, return SEM_ERROR, "sem is null");
+    check_if(sem == NULL, return SEM_FAIL, "sem is null");
     sem_init(sem, 0, count);
     return SEM_OK;
 }
@@ -38,11 +36,11 @@ static inline void sema_inc(tSem *sem)
     return;
 }
 
-static inline tSemStatus sema_dec(tSem *sem)
+static inline int sema_dec(tSem *sem)
 {
-    check_if(sem == NULL, return SEM_ERROR, "sem is null");
+    check_if(sem == NULL, return SEM_FAIL, "sem is null");
     if (0 == sem_wait(sem)) return SEM_OK;
-    else return SEM_ERROR;
+    else return SEM_FAIL;
 }
 
 

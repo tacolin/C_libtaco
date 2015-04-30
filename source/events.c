@@ -223,7 +223,7 @@ static tEvStatus _saveInterThreadAction(tEvLoop* loop, tEv* ev, tEvAction action
 
     ev->action = action;
 
-    tQueueStatus ret = queue_push(&loop->inter_thread_queue, ev);
+    int ret = queue_push(&loop->inter_thread_queue, ev);
     check_if(ret != QUEUE_OK, return EV_ERROR, "queue_put failed");
 
     eventfd_t val = loop->queue_fd;
@@ -241,9 +241,8 @@ tEvStatus evloop_init(tEvLoop* loop, int max_ev_num)
 
     memset(loop, 0, sizeof(tEvLoop));
 
-    tQueueStatus queue_ret = queue_init(&loop->inter_thread_queue,
-                                        max_ev_num, _cleanEv,
-                                        QUEUE_UNSUSPEND, QUEUE_UNSUSPEND);
+    int queue_ret = queue_init(&loop->inter_thread_queue, max_ev_num, _cleanEv,
+                               QUEUE_UNSUSPEND, QUEUE_UNSUSPEND);
     check_if(queue_ret != QUEUE_OK, return EV_ERROR, "queue_init failed");
 
     loop->epfd = epoll_create(max_ev_num);

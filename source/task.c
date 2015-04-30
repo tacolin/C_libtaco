@@ -83,12 +83,12 @@ static void _taskCleanFunc(void* arg)
 
 ////////////////////////////////////////////////////////////////////////////////
 
-tTaskStatus task_init(tTask* task, char* name, tTaskRoutineFn routine_fn,
+int task_init(tTask* task, char* name, tTaskRoutineFn routine_fn,
                       void* arg, tTaskPriority priority, tTaskType type)
 {
-    check_if(_system_init_flag == 0, return TASK_ERROR,"system is not initialized");
-    check_if(task == NULL, return TASK_ERROR, "task is null");
-    check_if(routine_fn == NULL, return TASK_ERROR ,"task routine function is null!");
+    check_if(_system_init_flag == 0, return TASK_FAIL,"system is not initialized");
+    check_if(task == NULL, return TASK_FAIL, "task is null");
+    check_if(routine_fn == NULL, return TASK_FAIL ,"task routine function is null!");
 
     memset(task, 0, sizeof(tTask));
 
@@ -117,32 +117,32 @@ tTaskStatus task_init(tTask* task, char* name, tTaskRoutineFn routine_fn,
     return TASK_OK;
 }
 
-tTaskStatus task_start(tTask* task)
+int task_start(tTask* task)
 {
-    check_if(_system_init_flag == 0, return TASK_ERROR,"system is not initialized");
-    check_if(task == NULL, return TASK_ERROR, "task is null");
+    check_if(_system_init_flag == 0, return TASK_FAIL,"system is not initialized");
+    check_if(task == NULL, return TASK_FAIL, "task is null");
 
     pthread_mutex_lock(&_task_lock);
-    tListStatus list_ret = list_append(&_task_list, task);
+    int list_ret = list_append(&_task_list, task);
     pthread_mutex_unlock(&_task_lock);
 
-    check_if(list_ret != LIST_OK, return TASK_ERROR, "append task(%s) to list failed", task->name);
+    check_if(list_ret != LIST_OK, return TASK_FAIL, "append task(%s) to list failed", task->name);
 
     pthread_attr_t *attr = &(task->attr);
     pthread_attr_init(attr);
     pthread_attr_setdetachstate(attr, PTHREAD_CREATE_JOINABLE);
 
     int ret = pthread_attr_setschedpolicy(attr, SCHED_FIFO);
-    check_if(ret != 0, return TASK_ERROR, "task(%s) set sched policy failed", task->name);
+    check_if(ret != 0, return TASK_FAIL, "task(%s) set sched policy failed", task->name);
 
     task->setting.sched_priority = task->priority;
     ret = pthread_attr_setschedparam(attr, &(task->setting));
-    check_if(ret != 0, return TASK_ERROR, "task(%s) set sched priority failed", task->name);
+    check_if(ret != 0, return TASK_FAIL, "task(%s) set sched priority failed", task->name);
 
     task->stop_flag = 0;
 
     ret = pthread_create(&(task->thread), attr, _taskMainFunc, (void*)task);
-    check_if(ret != 0, return TASK_ERROR, "task(%s) start fail to pthread_create()!", task->name);
+    check_if(ret != 0, return TASK_FAIL, "task(%s) start fail to pthread_create()!", task->name);
 
     sem_wait(&(task->stop_sem));
 
@@ -155,7 +155,7 @@ void task_stop(tTask* task)
     check_if(task == NULL, return, "task is null");
 
     pthread_mutex_lock(&_task_lock);
-    tListStatus list_ret = list_remove(&_task_list, task);
+    int list_ret = list_remove(&_task_list, task);
     pthread_mutex_unlock(&_task_lock);
     check_if(list_ret != LIST_OK, return, "remove task (%s) from running list failed", task->name);
 
@@ -173,12 +173,12 @@ void task_stop(tTask* task)
     return;
 }
 
-tTaskStatus task_system_init(void)
+int task_system_init(void)
 {
-    check_if(_system_init_flag != 0, return TASK_ERROR, "system has been already initialized");
+    check_if(_system_init_flag != 0, return TASK_FAIL, "system has been already initialized");
 
     int check = pthread_mutex_init(&_task_lock, NULL);
-    check_if(check != 0, return TASK_ERROR, "pthread_mutext_init failed");
+    check_if(check != 0, return TASK_FAIL, "pthread_mutext_init failed");
 
     list_init(&_task_list, _taskCleanFunc);
 
@@ -187,9 +187,9 @@ tTaskStatus task_system_init(void)
     return TASK_OK;
 }
 
-tTaskStatus task_system_uninit(void)
+int task_system_uninit(void)
 {
-    check_if(_system_init_flag == 0, return TASK_ERROR, "system is not initialized yet");
+    check_if(_system_init_flag == 0, return TASK_FAIL, "system is not initialized yet");
 
     int num = list_length(&_task_list);
 

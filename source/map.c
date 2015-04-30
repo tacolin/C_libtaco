@@ -17,14 +17,14 @@
 
 ////////////////////////////////////////////////////////////////////////////////
 
-tMapStatus _expandMap(tMap* map)
+int _expandMap(tMap* map)
 {
-    check_if(map == NULL, return MAP_ERROR, "map is null");
-    check_if(map->is_init != 1, return MAP_ERROR, "map is not init yet");
+    check_if(map == NULL, return MAP_FAIL, "map is null");
+    check_if(map->is_init != 1, return MAP_FAIL, "map is not init yet");
 
     int new_max_num = map->max_num * 2;
     tMapSlot* new_slots = calloc(sizeof(tMapSlot), new_max_num);
-    check_if(new_slots == NULL, return MAP_ERROR, "calloc failed");
+    check_if(new_slots == NULL, return MAP_FAIL, "calloc failed");
 
     int i;
     tMapSlot* old_one;
@@ -47,14 +47,14 @@ tMapStatus _expandMap(tMap* map)
 
 ////////////////////////////////////////////////////////////////////////////////
 
-tMapStatus map_init(tMap* map, tMapContentCleanFn cleanfn)
+int map_init(tMap* map, tMapContentCleanFn cleanfn)
 {
-    check_if(map == NULL, return MAP_ERROR, "map is null");
+    check_if(map == NULL, return MAP_FAIL, "map is null");
 
     memset(map, 0, sizeof(tMap));
 
-    tLockStatus lock_ret = rwlock_init(&map->rwlock);
-    check_if(lock_ret != LOCK_OK, return MAP_ERROR, "rwlock_init failed");
+    int lock_ret = rwlock_init(&map->rwlock);
+    check_if(lock_ret != LOCK_OK, return MAP_FAIL, "rwlock_init failed");
 
     map->lastid = 0;
     map->max_num = MAP_INIT_MAX_SLOTS;
@@ -62,17 +62,17 @@ tMapStatus map_init(tMap* map, tMapContentCleanFn cleanfn)
     map->cleanfn = cleanfn;
 
     map->slots = calloc(sizeof(tMapSlot), map->max_num);
-    check_if(map->slots == NULL, return MAP_ERROR, "calloc failed");
+    check_if(map->slots == NULL, return MAP_FAIL, "calloc failed");
 
     map->is_init = 1;
 
     return MAP_OK;
 }
 
-tMapStatus map_uninit(tMap* map)
+int map_uninit(tMap* map)
 {
-    check_if(map == NULL, return MAP_ERROR, "map is null");
-    check_if(map->is_init != 1, return MAP_ERROR, "map is not init yet");
+    check_if(map == NULL, return MAP_FAIL, "map is null");
+    check_if(map->is_init != 1, return MAP_FAIL, "map is not init yet");
 
     map->is_init = 0;
 
@@ -107,17 +107,17 @@ tMapStatus map_uninit(tMap* map)
     return MAP_OK;
 }
 
-tMapStatus map_add(tMap* map, void* content, unsigned int* pid)
+int map_add(tMap* map, void* content, unsigned int* pid)
 {
-    check_if(map == NULL, return MAP_ERROR, "map is null");
-    check_if(content == NULL, return MAP_ERROR, "content is null");
-    check_if(map->is_init != 1, return MAP_ERROR, "map is not init yet");
+    check_if(map == NULL, return MAP_FAIL, "map is null");
+    check_if(content == NULL, return MAP_FAIL, "content is null");
+    check_if(map->is_init != 1, return MAP_FAIL, "map is not init yet");
 
     rwlock_enterWrite(&map->rwlock);
 
     if (map->num >= (map->max_num * 3 / 4))
     {
-        tMapStatus ret = _expandMap(map);
+        int ret = _expandMap(map);
         check_if(ret != MAP_OK, goto _ERROR, "_expandMap failed");
     }
 
@@ -157,7 +157,7 @@ tMapStatus map_add(tMap* map, void* content, unsigned int* pid)
 
 _ERROR:
     rwlock_exitWrite(&map->rwlock);
-    return MAP_ERROR;
+    return MAP_FAIL;
 }
 
 static void* _tryDelete(tMap* map, unsigned int id)

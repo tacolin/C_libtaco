@@ -11,14 +11,8 @@
 
 #define TCP_PORT_ANY -1
 
-////////////////////////////////////////////////////////////////////////////////
-
-typedef enum
-{
-    TCP_OK = 0,
-    TCP_ERROR = -1
-
-} tTcpStatus;
+#define TCP_OK (0)
+#define TCP_FAIL (-1)
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -49,12 +43,12 @@ typedef struct tTcpServer
 
 ////////////////////////////////////////////////////////////////////////////////
 
-tTcpStatus tcp_server_init(tTcpServer* server, char* local_ip, int local_port, int max_conn_num);
-tTcpStatus tcp_server_uninit(tTcpServer* server);
-tTcpStatus tcp_server_accept(tTcpServer* server, tTcp* tcp);
+int tcp_server_init(tTcpServer* server, char* local_ip, int local_port, int max_conn_num);
+int tcp_server_uninit(tTcpServer* server);
+int tcp_server_accept(tTcpServer* server, tTcp* tcp);
 
-tTcpStatus tcp_client_init(tTcp* tcp, char* remote_ip, int remote_port, int local_port);
-tTcpStatus tcp_client_uninit(tTcp* tcp);
+int tcp_client_init(tTcp* tcp, char* remote_ip, int remote_port, int local_port);
+int tcp_client_uninit(tTcp* tcp);
 
 int tcp_recv(tTcp* tcp, void* buffer, int buffer_size);
 int tcp_send(tTcp* tcp, void* data, int data_len);

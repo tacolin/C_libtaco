@@ -1,7 +1,7 @@
 #include "basic.h"
 #include "list.h"
 
-tListBool largerThan(void* content, void* arg)
+int largerThan(void* content, void* arg)
 {
     long num = (long)arg;
     long get = *(long*)content;

@@ -11,14 +11,10 @@
 
 #define UNPATH_SIZE 108
 
+#define UN_OK (0)
+#define UN_FAIL (-1)
+
 ////////////////////////////////////////////////////////////////////////////////
-
-typedef enum 
-{
-    UN_OK = 0,
-    UN_ERROR = -1,
-
-} tUnStatus;
 
 typedef struct tUnTcp
 {
@@ -38,12 +34,12 @@ typedef struct tUnTcpServer
 
 ////////////////////////////////////////////////////////////////////////////////
 
-tUnStatus untcp_server_init(tUnTcpServer* server, char* path, int max_conn_num);
-tUnStatus untcp_server_uninit(tUnTcpServer* server);
-tUnStatus untcp_server_accept(tUnTcpServer* server, tUnTcp* untcp);
+int untcp_server_init(tUnTcpServer* server, char* path, int max_conn_num);
+int untcp_server_uninit(tUnTcpServer* server);
+int untcp_server_accept(tUnTcpServer* server, tUnTcp* untcp);
 
-tUnStatus untcp_client_init(tUnTcp* untcp, char* path);
-tUnStatus untcp_client_uninit(tUnTcp* untcp);
+int untcp_client_init(tUnTcp* untcp, char* path);
+int untcp_client_uninit(tUnTcp* untcp);
 
 int untcp_recv(tUnTcp* untcp, void* buffer, int buffer_size);
 int untcp_send(tUnTcp* untcp, void* data, int data_len);

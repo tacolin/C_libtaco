@@ -9,14 +9,10 @@
 
 #define TIMER_NAME_SIZE 20
 
+#define TIMER_OK (0)
+#define TIMER_FAIL (-1)
+
 ////////////////////////////////////////////////////////////////////////////////
-
-typedef enum
-{
-    TIMER_OK = 0,
-    TIMER_ERROR = -1
-
-} tTimerStatus;
 
 typedef enum
 {
@@ -58,12 +54,12 @@ typedef struct tTimer
 
 ////////////////////////////////////////////////////////////////////////////////
 
-tTimerStatus timer_init(tTimer* timer, char* name, int timeout_ms,
+int timer_init(tTimer* timer, char* name, int timeout_ms,
                         tTimerExpiredFn expired_fn, void* arg, tTimerType type);
 
-tTimerStatus timer_uninit(tTimer* timer);
-tTimerStatus timer_start(tTimer* timer);
-tTimerStatus timer_stop(tTimer* timer);
+int timer_uninit(tTimer* timer);
+int timer_start(tTimer* timer);
+int timer_stop(tTimer* timer);
 
 static inline tTimerState timer_state(tTimer* timer)
 {
@@ -71,7 +67,7 @@ static inline tTimerState timer_state(tTimer* timer)
     return timer->state;
 }
 
-tTimerStatus timer_system_init(void);
-tTimerStatus timer_system_uninit(void);
+int timer_system_init(void);
+int timer_system_uninit(void);
 
 #endif //_TIMER_H_

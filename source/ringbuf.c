@@ -27,11 +27,11 @@ int ringbuf_isEmpty(tRingBuf* rb)
     return (rb->end == rb->start) && (rb->e_msb == rb->s_msb);
 }
 
-tRbStatus ringbuf_init(tRingBuf* rb, int rb_size, int elem_size, void* elements)
+int ringbuf_init(tRingBuf* rb, int rb_size, int elem_size, void* elements)
 {
-    check_if(rb == NULL, return RB_ERROR, "rb is null");
-    check_if(rb_size <= 0, return RB_ERROR, "rb_size = %d invalid", rb_size);
-    check_if(elem_size <= 0, return RB_ERROR, "elem_size = %d invalid", elem_size);
+    check_if(rb == NULL, return RB_FAIL, "rb is null");
+    check_if(rb_size <= 0, return RB_FAIL, "rb_size = %d invalid", rb_size);
+    check_if(elem_size <= 0, return RB_FAIL, "elem_size = %d invalid", elem_size);
 
     // memset(rb, 0, sizeof(tRingBuf));
 
@@ -49,7 +49,7 @@ tRbStatus ringbuf_init(tRingBuf* rb, int rb_size, int elem_size, void* elements)
     else
     {
         rb->elements = calloc(elem_size, rb_size);
-        check_if(rb->elements == NULL, return RB_ERROR, "calloc failed");
+        check_if(rb->elements == NULL, return RB_FAIL, "calloc failed");
         rb->is_need_free = 1;
     }
 
@@ -58,9 +58,9 @@ tRbStatus ringbuf_init(tRingBuf* rb, int rb_size, int elem_size, void* elements)
     return RB_OK;
 }
 
-tRbStatus ringbuf_uninit(tRingBuf* rb)
+int ringbuf_uninit(tRingBuf* rb)
 {
-    check_if(rb == NULL, return RB_ERROR, "rb is null");
+    check_if(rb == NULL, return RB_FAIL, "rb is null");
 
     if (rb->elements && rb->is_need_free)
     {
@@ -80,11 +80,11 @@ void* ringbuf_preWrite(tRingBuf* rb)
     return rb->elements + rb->elem_size * rb->end;
 }
 
-tRbStatus ringbuf_postWrite(tRingBuf* rb)
+int ringbuf_postWrite(tRingBuf* rb)
 {
-    check_if(rb == NULL, return RB_ERROR, "rb is null");
-    check_if(rb->size <= 0, return RB_ERROR, "rb->size = %d invalid", rb->size);
-    check_if(rb->elements == NULL, return RB_ERROR, "rb->elements is null");
+    check_if(rb == NULL, return RB_FAIL, "rb is null");
+    check_if(rb->size <= 0, return RB_FAIL, "rb->size = %d invalid", rb->size);
+    check_if(rb->elements == NULL, return RB_FAIL, "rb->elements is null");
 
     if (ringbuf_isFull(rb)) _increaseRb(rb, &rb->start, &rb->s_msb);
 
@@ -93,13 +93,13 @@ tRbStatus ringbuf_postWrite(tRingBuf* rb)
     return RB_OK;
 }
 
-tRbStatus ringbuf_write(tRingBuf* rb, void* input)
+int ringbuf_write(tRingBuf* rb, void* input)
 {
-    check_if(input == NULL, return RB_ERROR, "input is null");
+    check_if(input == NULL, return RB_FAIL, "input is null");
     // ringbuf_preWrite will do the rest input checks
 
     void* elem = ringbuf_preWrite(rb);
-    if (elem == NULL) return RB_ERROR;
+    if (elem == NULL) return RB_FAIL;
 
     memcpy(elem, input, rb->elem_size);
 
@@ -117,26 +117,26 @@ void* ringbuf_preRead(tRingBuf* rb)
     return rb->elements + rb->elem_size * rb->start;
 }
 
-tRbStatus ringbuf_postRead(tRingBuf* rb)
+int ringbuf_postRead(tRingBuf* rb)
 {
-    check_if(rb == NULL, return RB_ERROR, "rb is null");
-    check_if(rb->size <= 0, return RB_ERROR, "rb->size = %d invalid", rb->size);
-    check_if(rb->elements == NULL, return RB_ERROR, "rb->elements is null");
+    check_if(rb == NULL, return RB_FAIL, "rb is null");
+    check_if(rb->size <= 0, return RB_FAIL, "rb->size = %d invalid", rb->size);
+    check_if(rb->elements == NULL, return RB_FAIL, "rb->elements is null");
 
-    if (ringbuf_isEmpty(rb)) return RB_ERROR;
+    if (ringbuf_isEmpty(rb)) return RB_FAIL;
 
     _increaseRb(rb, &rb->start, &rb->s_msb);
 
     return RB_OK;
 }
 
-tRbStatus ringbuf_read(tRingBuf* rb, void* output)
+int ringbuf_read(tRingBuf* rb, void* output)
 {
-    check_if(output == NULL, return RB_ERROR, "output is null");
+    check_if(output == NULL, return RB_FAIL, "output is null");
     // ringbuf_preRead will do the rest input checks
 
     void* elem = ringbuf_preRead(rb);
-    if (elem == NULL) return RB_ERROR;
+    if (elem == NULL) return RB_FAIL;
 
     memcpy(output, elem, rb->elem_size);
 

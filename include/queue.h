@@ -7,12 +7,10 @@
 
 ////////////////////////////////////////////////////////////////////////////////
 
-typedef enum
-{
-    QUEUE_OK = 0,
-    QUEUE_ERROR = -1
+#define QUEUE_OK (0)
+#define QUEUE_FAIL (-1)
 
-} tQueueStatus;
+////////////////////////////////////////////////////////////////////////////////
 
 typedef enum
 {
@@ -52,14 +50,14 @@ typedef struct tQueue
 
 ////////////////////////////////////////////////////////////////////////////////
 
-tQueueStatus queue_init(tQueue *queue, int max_queue_depth,
-                        tQueueContentCleanFn clean_func,
-                        tQueueSuspend is_put_suspend,
-                        tQueueSuspend is_get_suspend);
+int queue_init(tQueue *queue, int max_queue_depth,
+                tQueueContentCleanFn clean_func,
+                tQueueSuspend is_put_suspend,
+                tQueueSuspend is_get_suspend);
 
 void queue_clean(tQueue *queue);
 
-tQueueStatus queue_push(tQueue* queue, void* content);
+int queue_push(tQueue* queue, void* content);
 void* queue_pop(tQueue* queue);
 
 int queue_length(tQueue* queue);

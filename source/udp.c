@@ -2,23 +2,23 @@
 
 ////////////////////////////////////////////////////////////////////////////////
 
-tUdpStatus udp_toSockAddr(tUdpAddr udp_addr, struct sockaddr_in* sock_addr)
+int udp_toSockAddr(tUdpAddr udp_addr, struct sockaddr_in* sock_addr)
 {
-    check_if(sock_addr == NULL, return UDP_ERROR, "sock_addr is null");
+    check_if(sock_addr == NULL, return UDP_FAIL, "sock_addr is null");
 
     sock_addr->sin_family = AF_INET;
 
     int check = inet_pton(AF_INET, udp_addr.ipv4, &sock_addr->sin_addr);
-    check_if(check != 1, return UDP_ERROR, "inet_pton failed");
+    check_if(check != 1, return UDP_FAIL, "inet_pton failed");
 
     sock_addr->sin_port = htons(udp_addr.port);
 
     return UDP_OK;
 }
 
-tUdpStatus udp_toUdpAddr(struct sockaddr_in sock_addr, tUdpAddr* udp_addr)
+int udp_toUdpAddr(struct sockaddr_in sock_addr, tUdpAddr* udp_addr)
 {
-    check_if(udp_addr == NULL, return UDP_ERROR, "udp_addr is null");
+    check_if(udp_addr == NULL, return UDP_FAIL, "udp_addr is null");
 
     inet_ntop(AF_INET, &sock_addr.sin_addr, udp_addr->ipv4, INET_ADDRSTRLEN);
 
@@ -27,14 +27,14 @@ tUdpStatus udp_toUdpAddr(struct sockaddr_in sock_addr, tUdpAddr* udp_addr)
     return UDP_OK;
 }
 
-tUdpStatus udp_init(tUdp* udp, char* local_ip, int local_port)
+int udp_init(tUdp* udp, char* local_ip, int local_port)
 {
-    check_if(udp == NULL, return UDP_ERROR, "udp is null");
+    check_if(udp == NULL, return UDP_FAIL, "udp is null");
 
     udp->local_port = local_port;
 
     udp->fd = socket(AF_INET, SOCK_DGRAM, 0);
-    check_if(udp->fd < 0, return UDP_ERROR, "socket failed");
+    check_if(udp->fd < 0, return UDP_FAIL, "socket failed");
 
     int check;
 
@@ -71,22 +71,22 @@ _ERROR:
         close(udp->fd);
         udp->fd = -1;
     }
-    return UDP_ERROR;
+    return UDP_FAIL;
 }
 
 int udp_send(tUdp* udp, tUdpAddr remote, void* data, int data_len)
 {
-    check_if(udp == NULL, return UDP_ERROR, "udp is null");
-    check_if(udp->fd <= 0, return UDP_ERROR, "udp fd <= 0");
-    check_if(udp->is_init != 1, return UDP_ERROR, "udp is not initialized yet");
+    check_if(udp == NULL, return UDP_FAIL, "udp is null");
+    check_if(udp->fd <= 0, return UDP_FAIL, "udp fd <= 0");
+    check_if(udp->is_init != 1, return UDP_FAIL, "udp is not initialized yet");
 
-    check_if(data == NULL, return UDP_ERROR, "data is null");
-    check_if(data_len <= 0, return UDP_ERROR, "data_len is %d", data_len);
+    check_if(data == NULL, return UDP_FAIL, "data is null");
+    check_if(data_len <= 0, return UDP_FAIL, "data_len is %d", data_len);
 
     struct sockaddr_in remote_addr = {};
     int addrlen = sizeof(remote_addr);
 
-    tUdpStatus check = udp_toSockAddr(remote, &remote_addr);
+    int check = udp_toSockAddr(remote, &remote_addr);
     check_if(check != UDP_OK, return -1, "udp_toSockAddr failed");
 
     return sendto(udp->fd, data, data_len, 0,
@@ -96,12 +96,12 @@ int udp_send(tUdp* udp, tUdpAddr remote, void* data, int data_len)
 
 int udp_recv(tUdp* udp, void* buffer, int buffer_size, tUdpAddr* remote)
 {
-    check_if(udp == NULL, return UDP_ERROR, "udp is null");
-    check_if(udp->fd <= 0, return UDP_ERROR, "udp fd <= 0");
-    check_if(udp->is_init != 1, return UDP_ERROR, "udp is not initialized yet");
+    check_if(udp == NULL, return UDP_FAIL, "udp is null");
+    check_if(udp->fd <= 0, return UDP_FAIL, "udp fd <= 0");
+    check_if(udp->is_init != 1, return UDP_FAIL, "udp is not initialized yet");
 
-    check_if(buffer == NULL, return UDP_ERROR, "buffer is null");
-    check_if(buffer_size <= 0, return UDP_ERROR, "buffer_size is %d", buffer_size);
+    check_if(buffer == NULL, return UDP_FAIL, "buffer is null");
+    check_if(buffer_size <= 0, return UDP_FAIL, "buffer_size is %d", buffer_size);
 
     struct sockaddr_in remote_addr = {};
     int addrlen = sizeof(remote_addr);
@@ -109,17 +109,17 @@ int udp_recv(tUdp* udp, void* buffer, int buffer_size, tUdpAddr* remote)
     int recvlen = recvfrom(udp->fd, buffer, buffer_size, 0,
                            (struct sockaddr*)&remote_addr, &addrlen);
 
-    tUdpStatus check = udp_toUdpAddr(remote_addr, remote);
+    int check = udp_toUdpAddr(remote_addr, remote);
     check_if(check != UDP_OK, return -1, "udp_toUdpAddr failed");
 
     return recvlen;
 }
 
-tUdpStatus udp_uninit(tUdp* udp)
+int udp_uninit(tUdp* udp)
 {
-    check_if(udp == NULL, return UDP_ERROR, "udp is null");
-    check_if(udp->fd <= 0, return UDP_ERROR, "udp fd <= 0");
-    check_if(udp->is_init != 1, return UDP_ERROR, "udp is not initialized yet");
+    check_if(udp == NULL, return UDP_FAIL, "udp is null");
+    check_if(udp->fd <= 0, return UDP_FAIL, "udp fd <= 0");
+    check_if(udp->is_init != 1, return UDP_FAIL, "udp is not initialized yet");
 
     close(udp->fd);
     udp->fd = -1;

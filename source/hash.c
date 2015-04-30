@@ -4,7 +4,7 @@
 
 ////////////////////////////////////////////////////////////////////////////////
 
-static tListBool _comparekey(void* content, void* arg)
+static int _comparekey(void* content, void* arg)
 {
     check_if(content == NULL, return LIST_FALSE, "content is null");
     check_if(arg == NULL, return LIST_FALSE, "arg is null");
@@ -12,13 +12,13 @@ static tListBool _comparekey(void* content, void* arg)
     return (strcmp((char*)content, (char*)arg) == 0) ? LIST_TRUE : LIST_FALSE;
 }
 
-static tHashStatus _hcreate(struct hsearch_data* hdata, int max_num)
+static int _hcreate(struct hsearch_data* hdata, int max_num)
 {
-    check_if(hdata == NULL, return HASH_ERROR, "hdata is null");
-    check_if(max_num <= 0, return HASH_ERROR, "max_num = %d invalid", max_num);
+    check_if(hdata == NULL, return HASH_FAIL, "hdata is null");
+    check_if(max_num <= 0, return HASH_FAIL, "max_num = %d invalid", max_num);
 
     int ret = hcreate_r(max_num, hdata);
-    check_if(ret == 0, return HASH_ERROR, "hcreate_r failed");
+    check_if(ret == 0, return HASH_FAIL, "hcreate_r failed");
 
     return HASH_OK;
 }
@@ -29,11 +29,11 @@ static void _hdestroy(struct hsearch_data* hdata)
     hdestroy_r(hdata);
 }
 
-static tHashStatus _hadd(struct hsearch_data* hdata, char* key, void* value)
+static int _hadd(struct hsearch_data* hdata, char* key, void* value)
 {
-    check_if(hdata == NULL, return HASH_ERROR, "hdata is null");
-    check_if(key == NULL, return HASH_ERROR, "key is null");
-    check_if(value == NULL, return HASH_ERROR, "value is null");
+    check_if(hdata == NULL, return HASH_FAIL, "hdata is null");
+    check_if(key == NULL, return HASH_FAIL, "key is null");
+    check_if(value == NULL, return HASH_FAIL, "value is null");
 
     ENTRY item = {
         .key = key,
@@ -43,17 +43,17 @@ static tHashStatus _hadd(struct hsearch_data* hdata, char* key, void* value)
     ENTRY *pitem = NULL;
 
     int ret = hsearch_r(item, ENTER, &pitem, hdata);
-    check_if(ret == 0, return HASH_ERROR, "hsearch_r ENTER failed");
+    check_if(ret == 0, return HASH_FAIL, "hsearch_r ENTER failed");
 
     pitem->data = value;
 
     return HASH_OK;
 }
 
-static tHashStatus _hdelete(struct hsearch_data* hdata, char* key)
+static int _hdelete(struct hsearch_data* hdata, char* key)
 {
-    check_if(hdata == NULL, return HASH_ERROR, "hdata is null");
-    check_if(key == NULL, return HASH_ERROR, "key is null");
+    check_if(hdata == NULL, return HASH_FAIL, "hdata is null");
+    check_if(key == NULL, return HASH_FAIL, "key is null");
 
     ENTRY item = {
         .key = key
@@ -62,7 +62,7 @@ static tHashStatus _hdelete(struct hsearch_data* hdata, char* key)
     ENTRY *pitem = NULL;
 
     int ret = hsearch_r(item, FIND, &pitem, hdata);
-    check_if(ret == 0, return HASH_ERROR, "hsearch_r FIND failed");
+    check_if(ret == 0, return HASH_FAIL, "hsearch_r FIND failed");
 
     pitem->data = NULL;
 
@@ -89,30 +89,30 @@ static void* _hfind(struct hsearch_data* hdata, char* key)
 
 ////////////////////////////////////////////////////////////////////////////////
 
-tHashStatus hash_init(tHashTable* tbl, int max_num, tHashValueCleanFn cleanfn)
+int hash_init(tHashTable* tbl, int max_num, tHashValueCleanFn cleanfn)
 {
-    check_if(tbl == NULL, return HASH_ERROR, "tbl is null");
-    check_if(max_num <= 0, return HASH_ERROR, "max_num = %d invalid", max_num);
+    check_if(tbl == NULL, return HASH_FAIL, "tbl is null");
+    check_if(max_num <= 0, return HASH_FAIL, "max_num = %d invalid", max_num);
 
     memset(tbl, 0, sizeof(tHashTable));
 
-    tListStatus lret = list_init(&(tbl->keys), free);
-    check_if(lret != LIST_OK, return HASH_ERROR, "list_init failed");
+    int lret = list_init(&(tbl->keys), free);
+    check_if(lret != LIST_OK, return HASH_FAIL, "list_init failed");
 
     tbl->max_num = max_num;
     tbl->cleanfn = cleanfn;
 
-    tHashStatus hret = _hcreate(&(tbl->hdata), max_num);
-    check_if(hret != HASH_OK, return HASH_ERROR, "_hcreate failed");
+    int hret = _hcreate(&(tbl->hdata), max_num);
+    check_if(hret != HASH_OK, return HASH_FAIL, "_hcreate failed");
 
     tbl->is_init = 1;
     return HASH_OK;
 }
 
-tHashStatus hash_uninit(tHashTable* tbl)
+int hash_uninit(tHashTable* tbl)
 {
-    check_if(tbl == NULL, return HASH_ERROR, "tbl is null");
-    check_if(tbl->is_init != 1, return HASH_ERROR, "tbl is not init yet");
+    check_if(tbl == NULL, return HASH_FAIL, "tbl is null");
+    check_if(tbl->is_init != 1, return HASH_FAIL, "tbl is not init yet");
 
     if (tbl->cleanfn)
     {
@@ -131,26 +131,26 @@ tHashStatus hash_uninit(tHashTable* tbl)
     return HASH_OK;
 }
 
-tHashStatus hash_add(tHashTable *tbl, char* key, void* value)
+int hash_add(tHashTable *tbl, char* key, void* value)
 {
-    check_if(tbl == NULL, return HASH_ERROR, "tbl is null");
-    check_if(key == NULL, return HASH_ERROR, "key is null");
-    check_if(value == NULL, return HASH_ERROR, "value is null");
-    check_if(tbl->is_init != 1, return HASH_ERROR, "tbl is not init yet");
+    check_if(tbl == NULL, return HASH_FAIL, "tbl is null");
+    check_if(key == NULL, return HASH_FAIL, "key is null");
+    check_if(value == NULL, return HASH_FAIL, "value is null");
+    check_if(tbl->is_init != 1, return HASH_FAIL, "tbl is not init yet");
 
     int num = list_length(&(tbl->keys));
-    check_if(num >= tbl->max_num, return HASH_ERROR, "tbl num = %d is full", num);
+    check_if(num >= tbl->max_num, return HASH_FAIL, "tbl num = %d is full", num);
 
     int contain = hash_contains(tbl, key);
-    check_if(contain, return HASH_ERROR, "key = %s is already added", key);
+    check_if(contain, return HASH_FAIL, "key = %s is already added", key);
 
-    tHashStatus hret = _hadd(&(tbl->hdata), key, value);
-    check_if(hret != HASH_OK, return HASH_ERROR, "_hadd failed");
+    int hret = _hadd(&(tbl->hdata), key, value);
+    check_if(hret != HASH_OK, return HASH_FAIL, "_hadd failed");
 
     char* newkey = strdup(key);
     check_if(newkey == NULL, goto _ERROR, "strdup failed");
 
-    tListStatus lret = list_append(&(tbl->keys), newkey);
+    int lret = list_append(&(tbl->keys), newkey);
     check_if(lret != LIST_OK, goto _ERROR, "list_append failed");
 
     return HASH_OK;
@@ -160,37 +160,37 @@ _ERROR:
 
     _hdelete(&(tbl->hdata), key);
 
-    return HASH_ERROR;
+    return HASH_FAIL;
 }
 
-tHashStatus hash_modify(tHashTable* tbl, char* key, void* value)
+int hash_modify(tHashTable* tbl, char* key, void* value)
 {
-    check_if(tbl == NULL, return HASH_ERROR, "tbl is null");
-    check_if(key == NULL, return HASH_ERROR, "key is null");
-    check_if(value == NULL, return HASH_ERROR, "value is null");
-    check_if(tbl->is_init != 1, return HASH_ERROR, "tbl is not init yet");
+    check_if(tbl == NULL, return HASH_FAIL, "tbl is null");
+    check_if(key == NULL, return HASH_FAIL, "key is null");
+    check_if(value == NULL, return HASH_FAIL, "value is null");
+    check_if(tbl->is_init != 1, return HASH_FAIL, "tbl is not init yet");
 
     int contain = hash_contains(tbl, key);
-    check_if(contain == 0, return HASH_ERROR, "key = %s not exist in table", key);
+    check_if(contain == 0, return HASH_FAIL, "key = %s not exist in table", key);
 
     return _hadd(&(tbl->hdata), key, value);
 }
 
-tHashStatus hash_del(tHashTable* tbl, char* key, void** pvalue)
+int hash_del(tHashTable* tbl, char* key, void** pvalue)
 {
-    check_if(tbl == NULL, return HASH_ERROR, "tbl is null");
-    check_if(key == NULL, return HASH_ERROR, "key is null");
-    check_if(pvalue == NULL, return HASH_ERROR, "pvalue is null");
-    check_if(tbl->is_init != 1, return HASH_ERROR, "tbl is not init yet");
+    check_if(tbl == NULL, return HASH_FAIL, "tbl is null");
+    check_if(key == NULL, return HASH_FAIL, "key is null");
+    check_if(pvalue == NULL, return HASH_FAIL, "pvalue is null");
+    check_if(tbl->is_init != 1, return HASH_FAIL, "tbl is not init yet");
 
     char* newkey = list_find(&(tbl->keys), _comparekey, key);
-    check_if(newkey == NULL, return HASH_ERROR, "key = %s not exist in keys list", key);
+    check_if(newkey == NULL, return HASH_FAIL, "key = %s not exist in keys list", key);
 
     list_remove(&(tbl->keys), newkey);
     free(newkey);
 
     *pvalue = _hfind(&(tbl->hdata), key);
-    check_if(*pvalue == NULL, return HASH_ERROR, "key = %s not exist in table", key);
+    check_if(*pvalue == NULL, return HASH_FAIL, "key = %s not exist in table", key);
 
     return _hdelete(&(tbl->hdata), key);
 }

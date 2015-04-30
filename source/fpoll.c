@@ -49,7 +49,7 @@ static void _cleanFpollRec(void* content)
     return;
 }
 
-static tListBool _findFpoll(void* content, void* arg)
+static int _findFpoll(void* content, void* arg)
 {
     check_if(content == NULL, return LIST_FALSE, "content is null");
     check_if(arg == NULL, return LIST_FALSE, "arg is null");
@@ -59,7 +59,7 @@ static tListBool _findFpoll(void* content, void* arg)
     return (fpoll->fpd == fpd) ? LIST_TRUE : LIST_FALSE;
 }
 
-static tListBool _findFpollData(void* content, void* arg)
+static int _findFpollData(void* content, void* arg)
 {
     check_if(content == NULL, return LIST_FALSE, "content is null");
     check_if(arg == NULL, return LIST_FALSE, "arg is null");

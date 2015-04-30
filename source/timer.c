@@ -56,13 +56,13 @@ static void _defaultExpiredFn(int sig, siginfo_t *si, void *uc)
     return;
 }
 
-tTimerStatus timer_init(tTimer *timer, char* name, int timeout_ms,
+int timer_init(tTimer *timer, char* name, int timeout_ms,
                         tTimerExpiredFn expired_fn, void* arg,
                         tTimerType type)
 {
-    check_if(_system_init_flag == 0, return TIMER_ERROR, "timer system is not initilized");
-    check_if(timer == NULL, return TIMER_ERROR, "timer is null");
-    check_if(expired_fn == NULL, return TIMER_ERROR, "expired_fn is null");
+    check_if(_system_init_flag == 0, return TIMER_FAIL, "timer system is not initilized");
+    check_if(timer == NULL, return TIMER_FAIL, "timer is null");
+    check_if(expired_fn == NULL, return TIMER_FAIL, "expired_fn is null");
 
     memset(timer, 0, sizeof(tTimer));
     if (name)
@@ -88,31 +88,31 @@ tTimerStatus timer_init(tTimer *timer, char* name, int timeout_ms,
     return TIMER_OK;
 }
 
-tTimerStatus timer_uninit(tTimer* timer)
+int timer_uninit(tTimer* timer)
 {
-    check_if(_system_init_flag == 0, return TIMER_ERROR, "timer system is not initilized");
-    check_if(timer == NULL, return TIMER_ERROR, "timer is null");
+    check_if(_system_init_flag == 0, return TIMER_FAIL, "timer system is not initilized");
+    check_if(timer == NULL, return TIMER_FAIL, "timer is null");
 
     check_if((timer->guard_code == TIMER_GUARD_CODE)
              && (timer->state == TIMER_RUNNING),
-             return TIMER_ERROR, "timer(%s) is still running", timer->name);
+             return TIMER_FAIL, "timer(%s) is still running", timer->name);
 
     memset(timer, 0, sizeof(tTimer));
 
     return TIMER_OK;
 }
 
-tTimerStatus timer_start(tTimer *timer)
+int timer_start(tTimer *timer)
 {
-    check_if(_system_init_flag == 0, return TIMER_ERROR, "timer system is not initilized");
+    check_if(_system_init_flag == 0, return TIMER_FAIL, "timer system is not initilized");
 
-    check_if(timer == NULL, return TIMER_ERROR, "timer is null");
+    check_if(timer == NULL, return TIMER_FAIL, "timer is null");
 
-    check_if(timer->guard_code != TIMER_GUARD_CODE, return TIMER_ERROR,
+    check_if(timer->guard_code != TIMER_GUARD_CODE, return TIMER_FAIL,
              "this timer(%s) is not initialized, can not be started",
              timer->name);
 
-    check_if(timer->state == TIMER_RUNNING, return TIMER_ERROR,
+    check_if(timer->state == TIMER_RUNNING, return TIMER_FAIL,
              "timer(%s) is running, can not be started again",
              timer->name);
 
@@ -126,19 +126,19 @@ tTimerStatus timer_start(tTimer *timer)
     }
 
     int ret = timer_create(CLOCK_REALTIME, &timer->ev, &timer->timer_id);
-    check_if(ret < 0, return TIMER_ERROR, "timer_create failed");
+    check_if(ret < 0, return TIMER_FAIL, "timer_create failed");
 
     ret = timer_settime(timer->timer_id, 0, &timeval, NULL);
-    check_if(ret < 0, return TIMER_ERROR, "timer_settime failed");
+    check_if(ret < 0, return TIMER_FAIL, "timer_settime failed");
 
     lock_enter(&_running_lock);
-    tListStatus list_ret = list_append(&_running_list, timer);
+    int list_ret = list_append(&_running_list, timer);
     lock_exit(&_running_lock);
     if (list_ret != LIST_OK)
     {
         memset(&timeval, 0, sizeof(struct itimerspec));
         timer_settime(timer->timer_id, 0, &timeval, NULL);
-        return TIMER_ERROR;
+        return TIMER_FAIL;
     }
 
     timer->state = TIMER_RUNNING;
@@ -146,21 +146,21 @@ tTimerStatus timer_start(tTimer *timer)
     return TIMER_OK;
 }
 
-tTimerStatus timer_stop(tTimer *timer)
+int timer_stop(tTimer *timer)
 {
-    check_if(_system_init_flag == 0, return TIMER_ERROR, "timer system is not initilized");
-    check_if(timer == NULL, return TIMER_ERROR, "timer is null");
-    check_if(timer->guard_code != TIMER_GUARD_CODE, return TIMER_ERROR,
+    check_if(_system_init_flag == 0, return TIMER_FAIL, "timer system is not initilized");
+    check_if(timer == NULL, return TIMER_FAIL, "timer is null");
+    check_if(timer->guard_code != TIMER_GUARD_CODE, return TIMER_FAIL,
              "this timer(%s) is not initialized, can not be started",
              timer->name);
-    check_if(timer->state == TIMER_STOPPED, return TIMER_ERROR,
+    check_if(timer->state == TIMER_STOPPED, return TIMER_FAIL,
              "timer(%s) is stopped, can not be started again", timer->name);
 
     struct itimerspec timeval = {};
     timer_settime(timer->timer_id, 0, &timeval, NULL);
 
     lock_enter(&_running_lock);
-    tListStatus ret = list_remove(&_running_list, timer);
+    int ret = list_remove(&_running_list, timer);
     lock_exit(&_running_lock);
     if (ret != LIST_OK)
     {
@@ -174,7 +174,7 @@ tTimerStatus timer_stop(tTimer *timer)
     return TIMER_OK;
 }
 
-tTimerStatus timer_system_init(void)
+int timer_system_init(void)
 {
     if (_system_init_flag == 0)
     {
@@ -196,10 +196,10 @@ tTimerStatus timer_system_init(void)
         derror("timer system has already been initialized!");
     }
 
-    return TIMER_ERROR;
+    return TIMER_FAIL;
 }
 
-tTimerStatus timer_system_uninit(void)
+int timer_system_uninit(void)
 {
     if ( _system_init_flag == 1 )
     {
@@ -215,5 +215,5 @@ tTimerStatus timer_system_uninit(void)
         derror("timer system is not initialized!");
     }
 
-    return TIMER_ERROR;
+    return TIMER_FAIL;
 }

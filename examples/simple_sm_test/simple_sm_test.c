@@ -11,13 +11,13 @@ enum
     MAX_EVENTS
 };
 
-static tSmStatus _action(tSm* sm, tSmEv* ev)
+static int _action(tSm* sm, tSmEv* ev)
 {
     dprint("here");
     return SM_OK;
 }
 
-static tSmStatus _action_new(tSm* sm, tSmEv* ev)
+static int _action_new(tSm* sm, tSmEv* ev)
 {
     dprint("here");
     sm_sendEv(sm, EVENT1, 0, 0);
@@ -31,13 +31,13 @@ static int8_t _guard(tSm* sm, tSmSt* st, tSmEv* ev)
     return (int8_t)val;
 }
 
-static tSmStatus _enterSt(tSm* sm, tSmSt* st)
+static int _enterSt(tSm* sm, tSmSt* st)
 {
     dprint("enter %s", st->name);
     return SM_OK;
 }
 
-static tSmStatus _exitSt(tSm* sm, tSmSt* st)
+static int _exitSt(tSm* sm, tSmSt* st)
 {
     dprint("exit %s", st->name);
     return SM_OK;

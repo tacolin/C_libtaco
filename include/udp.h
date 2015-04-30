@@ -11,14 +11,10 @@
 
 #define UDP_PORT_ANY -1
 
+#define UDP_OK (0)
+#define UDP_FAIL (-1)
+
 ////////////////////////////////////////////////////////////////////////////////
-
-typedef enum
-{
-    UDP_OK = 0,
-    UDP_ERROR = -1
-
-} tUdpStatus;
 
 typedef struct tUdpAddr
 {
@@ -37,16 +33,13 @@ typedef struct tUdp
 
 ////////////////////////////////////////////////////////////////////////////////
 
-tUdpStatus udp_init(tUdp* udp, char* local_ip, int local_port);
-
-int udp_send(tUdp* udp, tUdpAddr remote,
-                    void* data, int data_len);
-
+int udp_send(tUdp* udp, tUdpAddr remote, void* data, int data_len);
 int udp_recv(tUdp* udp, void* buffer, int buffer_size, tUdpAddr* remote);
 
-tUdpStatus udp_uninit(tUdp* udp);
+int udp_init(tUdp* udp, char* local_ip, int local_port);
+int udp_uninit(tUdp* udp);
 
-tUdpStatus udp_toUdpAddr(struct sockaddr_in sock_addr, tUdpAddr* udp_addr);
-tUdpStatus udp_toSockAddr(tUdpAddr udp_addr, struct sockaddr_in* sock_addr);
+int udp_toUdpAddr(struct sockaddr_in sock_addr, tUdpAddr* udp_addr);
+int udp_toSockAddr(tUdpAddr udp_addr, struct sockaddr_in* sock_addr);
 
 #endif //_UDP_H_

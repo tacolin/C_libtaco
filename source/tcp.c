@@ -2,23 +2,23 @@
 
 ////////////////////////////////////////////////////////////////////////////////
 
-tTcpStatus tcp_toSockAddr(tTcpAddr tcp_addr, struct sockaddr_in* sock_addr)
+int tcp_toSockAddr(tTcpAddr tcp_addr, struct sockaddr_in* sock_addr)
 {
-    check_if(sock_addr == NULL, return TCP_ERROR, "sock_addr is null");
+    check_if(sock_addr == NULL, return TCP_FAIL, "sock_addr is null");
 
     sock_addr->sin_family = AF_INET;
 
     int check = inet_pton(AF_INET, tcp_addr.ipv4, &sock_addr->sin_addr);
-    check_if(check != 1, return TCP_ERROR, "inet_pton failed");
+    check_if(check != 1, return TCP_FAIL, "inet_pton failed");
 
     sock_addr->sin_port = htons(tcp_addr.port);
 
     return TCP_OK;
 }
 
-tTcpStatus tcp_toTcpAddr(struct sockaddr_in sock_addr, tTcpAddr* tcp_addr)
+int tcp_toTcpAddr(struct sockaddr_in sock_addr, tTcpAddr* tcp_addr)
 {
-    check_if(tcp_addr == NULL, return TCP_ERROR, "tcp_addr is null");
+    check_if(tcp_addr == NULL, return TCP_FAIL, "tcp_addr is null");
 
     inet_ntop(AF_INET, &sock_addr.sin_addr, tcp_addr->ipv4, INET_ADDRSTRLEN);
 
@@ -27,10 +27,10 @@ tTcpStatus tcp_toTcpAddr(struct sockaddr_in sock_addr, tTcpAddr* tcp_addr)
     return TCP_OK;
 }
 
-tTcpStatus tcp_server_init(tTcpServer* server, char* local_ip, int local_port, int max_conn_num)
+int tcp_server_init(tTcpServer* server, char* local_ip, int local_port, int max_conn_num)
 {
-    check_if(server == NULL, return TCP_ERROR, "server is null");
-    check_if(max_conn_num <= 0, return TCP_ERROR, "max_conn_num = %d invalid", max_conn_num);
+    check_if(server == NULL, return TCP_FAIL, "server is null");
+    check_if(max_conn_num <= 0, return TCP_FAIL, "max_conn_num = %d invalid", max_conn_num);
 
     int check;
     struct sockaddr_in me = {};
@@ -38,7 +38,7 @@ tTcpStatus tcp_server_init(tTcpServer* server, char* local_ip, int local_port, i
     if (local_ip)
     {
         check = inet_pton(AF_INET, local_ip, &me.sin_addr);
-        check_if(check != 1, return TCP_ERROR, "inet_pton failed");
+        check_if(check != 1, return TCP_FAIL, "inet_pton failed");
     }
     else
     {
@@ -47,7 +47,7 @@ tTcpStatus tcp_server_init(tTcpServer* server, char* local_ip, int local_port, i
     me.sin_port = htons(local_port);
 
     server->fd = socket(AF_INET, SOCK_STREAM, 0);
-    check_if(server->fd < 0, return TCP_ERROR, "sock failed");
+    check_if(server->fd < 0, return TCP_FAIL, "sock failed");
 
     int on = 1;
     check = setsockopt(server->fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
@@ -70,13 +70,13 @@ _ERROR:
         close(server->fd);
         server->fd = -1;
     }
-    return TCP_ERROR;
+    return TCP_FAIL;
 }
 
-tTcpStatus tcp_server_uninit(tTcpServer* server)
+int tcp_server_uninit(tTcpServer* server)
 {
-    check_if(server == NULL, return TCP_ERROR, "server is null");
-    check_if(server->is_init == 0, return TCP_ERROR, "server is not init yet");
+    check_if(server == NULL, return TCP_FAIL, "server is null");
+    check_if(server->is_init == 0, return TCP_FAIL, "server is not init yet");
 
     if (server->fd > 0)
     {
@@ -88,21 +88,21 @@ tTcpStatus tcp_server_uninit(tTcpServer* server)
     return TCP_OK;
 }
 
-tTcpStatus tcp_server_accept(tTcpServer* server, tTcp* tcp)
+int tcp_server_accept(tTcpServer* server, tTcp* tcp)
 {
-    check_if(server == NULL, return TCP_ERROR, "server is null");
-    check_if(server->is_init == 0, return TCP_ERROR, "server is not init yet");
-    check_if(server->fd < 0, return TCP_ERROR, "server fd = %d invalid", server->fd);
-    check_if(tcp == NULL, return TCP_ERROR, "tcp is null");
+    check_if(server == NULL, return TCP_FAIL, "server is null");
+    check_if(server->is_init == 0, return TCP_FAIL, "server is not init yet");
+    check_if(server->fd < 0, return TCP_FAIL, "server fd = %d invalid", server->fd);
+    check_if(tcp == NULL, return TCP_FAIL, "tcp is null");
 
     int fd;
     struct sockaddr_in remote = {};
     int addrlen = sizeof(remote);
 
     fd = accept(server->fd, (struct sockaddr*)&remote, &addrlen);
-    check_if(fd < 0, return TCP_ERROR, "accept failed");
+    check_if(fd < 0, return TCP_FAIL, "accept failed");
 
-    tTcpStatus ret = tcp_toTcpAddr(remote, &tcp->remote);
+    int ret = tcp_toTcpAddr(remote, &tcp->remote);
     check_if(ret != TCP_OK, goto _ERROR, "tcp_toTcpAddr failed");
 
     tcp->fd = fd;
@@ -115,25 +115,25 @@ _ERROR:
     {
         close(fd);
     }
-    return TCP_ERROR;
+    return TCP_FAIL;
 }
 
-tTcpStatus tcp_client_init(tTcp* tcp, char* remote_ip, int remote_port, int local_port)
+int tcp_client_init(tTcp* tcp, char* remote_ip, int remote_port, int local_port)
 {
-    check_if(tcp == NULL, return TCP_ERROR, "tcp is null");
-    check_if(remote_ip == NULL, return TCP_ERROR, "remote_ip is null");
-    check_if(tcp->is_init != 0, return TCP_ERROR, "tcp has been init");
+    check_if(tcp == NULL, return TCP_FAIL, "tcp is null");
+    check_if(remote_ip == NULL, return TCP_FAIL, "remote_ip is null");
+    check_if(tcp->is_init != 0, return TCP_FAIL, "tcp has been init");
 
     struct sockaddr_in remote = {};
     remote.sin_family = AF_INET;
 
     int check = inet_pton(AF_INET, remote_ip, &remote.sin_addr);
-    check_if(check != 1, return TCP_ERROR, "inet_pton failed");
+    check_if(check != 1, return TCP_FAIL, "inet_pton failed");
 
     remote.sin_port = htons(remote_port);
 
     tcp->fd = socket(AF_INET, SOCK_STREAM, 0);
-    check_if(tcp->fd < 0, return TCP_ERROR, "socket failed");
+    check_if(tcp->fd < 0, return TCP_FAIL, "socket failed");
 
     if (local_port != TCP_PORT_ANY)
     {
@@ -165,13 +165,13 @@ _ERROR:
         close(tcp->fd);
         tcp->fd = -1;
     }
-    return TCP_ERROR;
+    return TCP_FAIL;
 }
 
-tTcpStatus tcp_client_uninit(tTcp* tcp)
+int tcp_client_uninit(tTcp* tcp)
 {
-    check_if(tcp == NULL, return TCP_ERROR, "tcp is null");
-    check_if(tcp->is_init == 0, return TCP_ERROR, "tcp is not init yet");
+    check_if(tcp == NULL, return TCP_FAIL, "tcp is null");
+    check_if(tcp->is_init == 0, return TCP_FAIL, "tcp is not init yet");
 
     if (tcp->fd > 0)
     {

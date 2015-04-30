@@ -14,7 +14,6 @@
 
 static unsigned char    _cookie_secret[DTLS_COOKIE_SECRET_LEN] = {0};
 static int              _cookie_initialized                    = 0;
-// static pthread_mutex_t* _mutex_buf                             = NULL;
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -102,9 +101,9 @@ static unsigned long _dtlsIdCallback(void)
 //     }
 // }
 
-static tDtlsStatus _checkSslWrite(SSL* ssl, char* buffer, int len)
+static int _checkSslWrite(SSL* ssl, char* buffer, int len)
 {
-    int ret = DTLS_ERROR;
+    int ret = DTLS_FAIL;
 
     switch (SSL_get_error(ssl, len))
     {
@@ -142,9 +141,9 @@ static tDtlsStatus _checkSslWrite(SSL* ssl, char* buffer, int len)
     return ret;
 }
 
-static tDtlsStatus _checkSslRead(SSL* ssl, char* buffer, int len)
+static int _checkSslRead(SSL* ssl, char* buffer, int len)
 {
-    int ret = DTLS_ERROR;
+    int ret = DTLS_FAIL;
 
     switch (SSL_get_error(ssl, len))
     {
@@ -371,23 +370,23 @@ static int _verifyCookie(SSL *ssl, unsigned char *cookie,
 
 ////////////////////////////////////////////////////////////////////////////////
 
-tDtlsStatus dtls_toSockAddr(tDtlsAddr dtls_addr, struct sockaddr_in* sock_addr)
+int dtls_toSockAddr(tDtlsAddr dtls_addr, struct sockaddr_in* sock_addr)
 {
-    check_if(sock_addr == NULL, return DTLS_ERROR, "sock_addr is null");
+    check_if(sock_addr == NULL, return DTLS_FAIL, "sock_addr is null");
 
     sock_addr->sin_family = AF_INET;
 
     int check = inet_pton(AF_INET, dtls_addr.ipv4, &sock_addr->sin_addr);
-    check_if(check != 1, return DTLS_ERROR, "inet_pton failed");
+    check_if(check != 1, return DTLS_FAIL, "inet_pton failed");
 
     sock_addr->sin_port = htons(dtls_addr.port);
 
     return DTLS_OK;
 }
 
-tDtlsStatus dtls_toDtlsAddr(struct sockaddr_in sock_addr, tDtlsAddr* dtls_addr)
+int dtls_toDtlsAddr(struct sockaddr_in sock_addr, tDtlsAddr* dtls_addr)
 {
-    check_if(dtls_addr == NULL, return DTLS_ERROR, "dtls_addr is null");
+    check_if(dtls_addr == NULL, return DTLS_FAIL, "dtls_addr is null");
 
     inet_ntop(AF_INET, &sock_addr.sin_addr, dtls_addr->ipv4, INET_ADDRSTRLEN);
 
@@ -398,14 +397,14 @@ tDtlsStatus dtls_toDtlsAddr(struct sockaddr_in sock_addr, tDtlsAddr* dtls_addr)
 
 ////////////////////////////////////////////////////////////////////////////////
 
-tDtlsStatus dtls_server_init(tDtlsServer* server,
+int dtls_server_init(tDtlsServer* server,
                              char* local_ip, int local_port,
                              char* cert_path, char* key_path, int timeout_sec)
 {
-    check_if(server == NULL, return DTLS_ERROR, "server is null");
-    check_if(cert_path == NULL, return DTLS_ERROR, "cert_path is null");
-    check_if(key_path == NULL, return DTLS_ERROR, "key_path is null");
-    check_if(timeout_sec <= 0, return DTLS_ERROR, "timeout_sec <= 0");
+    check_if(server == NULL, return DTLS_FAIL, "server is null");
+    check_if(cert_path == NULL, return DTLS_FAIL, "cert_path is null");
+    check_if(key_path == NULL, return DTLS_FAIL, "key_path is null");
+    check_if(timeout_sec <= 0, return DTLS_FAIL, "timeout_sec <= 0");
 
     memset(server, 0, sizeof(tDtlsServer));
 
@@ -418,7 +417,7 @@ tDtlsStatus dtls_server_init(tDtlsServer* server,
     if (local_ip)
     {
         check = inet_pton(AF_INET, local_ip, &me.sin_addr);
-        check_if(check != 1, return DTLS_ERROR, "inet_pton failed");
+        check_if(check != 1, return DTLS_FAIL, "inet_pton failed");
     }
     else
     {
@@ -426,8 +425,8 @@ tDtlsStatus dtls_server_init(tDtlsServer* server,
     }
     me.sin_port = htons(local_port);
 
-    tDtlsStatus dtls_ret = dtls_toDtlsAddr(me, &server->local);
-    check_if(dtls_ret != DTLS_OK, return DTLS_ERROR, "dtls_toDtlsAddr failed");
+    int dtls_ret = dtls_toDtlsAddr(me, &server->local);
+    check_if(dtls_ret != DTLS_OK, return DTLS_FAIL, "dtls_toDtlsAddr failed");
 
     OpenSSL_add_ssl_algorithms();
     SSL_load_error_strings();
@@ -484,12 +483,12 @@ tDtlsStatus dtls_server_init(tDtlsServer* server,
 
 _ERROR:
     dtls_server_uninit(server);
-    return DTLS_ERROR;
+    return DTLS_FAIL;
 }
 
-tDtlsStatus dtls_server_uninit(tDtlsServer* server)
+int dtls_server_uninit(tDtlsServer* server)
 {
-    check_if(server == NULL, return DTLS_ERROR, "server is null");
+    check_if(server == NULL, return DTLS_FAIL, "server is null");
 
     if (server->fd > 0)
     {
@@ -512,11 +511,11 @@ tDtlsStatus dtls_server_uninit(tDtlsServer* server)
     return DTLS_OK;
 }
 
-tDtlsStatus dtls_server_accept(tDtlsServer* server, tDtls* dtls)
+int dtls_server_accept(tDtlsServer* server, tDtls* dtls)
 {
-    check_if(server == NULL, return DTLS_ERROR, "server is null");
-    check_if(dtls == NULL, return DTLS_ERROR, "dtls is null");
-    check_if(server->is_init != 1, return DTLS_ERROR, "server is not init yet");
+    check_if(server == NULL, return DTLS_FAIL, "server is null");
+    check_if(dtls == NULL, return DTLS_FAIL, "dtls is null");
+    check_if(server->is_init != 1, return DTLS_FAIL, "server is not init yet");
 
     memset(dtls, 0, sizeof(tDtls));
 
@@ -550,7 +549,7 @@ tDtlsStatus dtls_server_accept(tDtlsServer* server, tDtls* dtls)
         if (server->accept_run != 1) goto _ERROR;
     }
 
-    tDtlsStatus dtls_ret = dtls_toDtlsAddr(remote.s4, &dtls->remote);
+    int dtls_ret = dtls_toDtlsAddr(remote.s4, &dtls->remote);
     check_if(dtls_ret != DTLS_OK, goto _ERROR, "dtls_toDtlsAddr failed");
 
     struct sockaddr_in me = {};
@@ -617,21 +616,21 @@ tDtlsStatus dtls_server_accept(tDtlsServer* server, tDtls* dtls)
 
 _ERROR:
     dtls_client_uninit(dtls);
-    return DTLS_ERROR;
+    return DTLS_FAIL;
 
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 
-tDtlsStatus dtls_client_init(tDtls* dtls, char* remote_ip, int remote_port,
+int dtls_client_init(tDtls* dtls, char* remote_ip, int remote_port,
                              int local_port, char* cert_path, char* key_path,
                              int timeout_sec)
 {
-    check_if(dtls == NULL, return DTLS_ERROR, "dtls is null");
-    check_if(remote_ip == NULL, return DTLS_ERROR, "remote_ip is null");
-    check_if(cert_path == NULL, return DTLS_ERROR, "cert_path is null");
-    check_if(key_path == NULL, return DTLS_ERROR, "key_path is null");
-    check_if(timeout_sec <= 0, return DTLS_ERROR, "timeout_sec = %d invalid", timeout_sec);
+    check_if(dtls == NULL, return DTLS_FAIL, "dtls is null");
+    check_if(remote_ip == NULL, return DTLS_FAIL, "remote_ip is null");
+    check_if(cert_path == NULL, return DTLS_FAIL, "cert_path is null");
+    check_if(key_path == NULL, return DTLS_FAIL, "key_path is null");
+    check_if(timeout_sec <= 0, return DTLS_FAIL, "timeout_sec = %d invalid", timeout_sec);
 
     memset(dtls, 0, sizeof(tDtls));
 
@@ -643,7 +642,7 @@ tDtlsStatus dtls_client_init(tDtls* dtls, char* remote_ip, int remote_port,
     timeout.tv_usec = 0;
 
     dtls->fd = socket(AF_INET, SOCK_DGRAM, 0);
-    check_if(dtls->fd < 0, return DTLS_ERROR, "socket failed");
+    check_if(dtls->fd < 0, return DTLS_FAIL, "socket failed");
 
     struct sockaddr_in me = {};
     me.sin_family = AF_INET;
@@ -658,7 +657,7 @@ tDtlsStatus dtls_client_init(tDtls* dtls, char* remote_ip, int remote_port,
     check_if(check != 1, goto _ERROR, "inet_pton failed");
     remote.sin_port = htons(remote_port);
 
-    tDtlsStatus dtls_ret = dtls_toDtlsAddr(remote, &dtls->remote);
+    int dtls_ret = dtls_toDtlsAddr(remote, &dtls->remote);
     check_if(dtls_ret != DTLS_OK, goto _ERROR, "dtls_toDtlsAddr failed");
 
     const int on = 1;
@@ -737,13 +736,13 @@ tDtlsStatus dtls_client_init(tDtls* dtls, char* remote_ip, int remote_port,
 
 _ERROR:
     dtls_client_uninit(dtls);
-    return DTLS_ERROR;
+    return DTLS_FAIL;
 }
 
-tDtlsStatus dtls_client_uninit(tDtls* dtls)
+int dtls_client_uninit(tDtls* dtls)
 {
-    check_if(dtls == NULL, return DTLS_ERROR, "dtls is null");
-    // check_if(dtls->is_init != 1, return DTLS_ERROR, "dtls is not init yet");
+    check_if(dtls == NULL, return DTLS_FAIL, "dtls is null");
+    // check_if(dtls->is_init != 1, return DTLS_FAIL, "dtls is not init yet");
 
     if (dtls->ssl)
     {
@@ -807,11 +806,11 @@ int dtls_send(tDtls* dtls, void* data, int data_len)
 
 ////////////////////////////////////////////////////////////////////////////////
 
-// tDtlsStatus dtls_system_init(void)
+// int dtls_system_init(void)
 // {
 //     _mutex_buf = (pthread_mutex_t*)calloc(sizeof(pthread_mutex_t),
 //                                           CRYPTO_num_locks());
-//     check_if(_mutex_buf == NULL, return DTLS_ERROR, "calloc failed");
+//     check_if(_mutex_buf == NULL, return DTLS_FAIL, "calloc failed");
 
 //     int i;
 //     for (i=0; i<CRYPTO_num_locks(); i++)
