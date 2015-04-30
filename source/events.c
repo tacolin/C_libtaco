@@ -214,17 +214,17 @@ static void _handleEv(tEvLoop* loop, tEv* ev)
     return;
 }
 
-static tEvStatus _saveInterThreadAction(tEvLoop* loop, tEv* ev, tEvAction action)
+static int _saveInterThreadAction(tEvLoop* loop, tEv* ev, tEvAction action)
 {
-    check_if(loop == NULL, return EV_ERROR, "loop is null");
+    check_if(loop == NULL, return EV_FAIL, "loop is null");
     check_if(loop->is_init != 1, return, "loop is not init yet");
-    check_if(ev == NULL, return EV_ERROR, "ev is null");
+    check_if(ev == NULL, return EV_FAIL, "ev is null");
     check_if(ev->is_init != 1, return, "ev is not init yet");
 
     ev->action = action;
 
     int ret = queue_push(&loop->inter_thread_queue, ev);
-    check_if(ret != QUEUE_OK, return EV_ERROR, "queue_put failed");
+    check_if(ret != QUEUE_OK, return EV_FAIL, "queue_put failed");
 
     eventfd_t val = loop->queue_fd;
     eventfd_write(loop->queue_fd, val);
@@ -234,19 +234,19 @@ static tEvStatus _saveInterThreadAction(tEvLoop* loop, tEv* ev, tEvAction action
 
 ////////////////////////////////////////////////////////////////////////////////
 
-tEvStatus evloop_init(tEvLoop* loop, int max_ev_num)
+int evloop_init(tEvLoop* loop, int max_ev_num)
 {
-    check_if(loop == NULL, return EV_ERROR, "loop is null");
-    check_if(max_ev_num <= 0, return EV_ERROR, "max_ev_num = %d invalid", max_ev_num);
+    check_if(loop == NULL, return EV_FAIL, "loop is null");
+    check_if(max_ev_num <= 0, return EV_FAIL, "max_ev_num = %d invalid", max_ev_num);
 
     memset(loop, 0, sizeof(tEvLoop));
 
     int queue_ret = queue_init(&loop->inter_thread_queue, max_ev_num, _cleanEv,
                                QUEUE_UNSUSPEND, QUEUE_UNSUSPEND);
-    check_if(queue_ret != QUEUE_OK, return EV_ERROR, "queue_init failed");
+    check_if(queue_ret != QUEUE_OK, return EV_FAIL, "queue_init failed");
 
     loop->epfd = epoll_create(max_ev_num);
-    check_if(loop->epfd <= 0, return EV_ERROR, "epoll_create failed");
+    check_if(loop->epfd <= 0, return EV_FAIL, "epoll_create failed");
 
     loop->max_ev_num = max_ev_num;
     loop->curr_ev_num = 0;
@@ -258,11 +258,11 @@ tEvStatus evloop_init(tEvLoop* loop, int max_ev_num)
     return EV_OK;
 }
 
-tEvStatus evloop_uninit(tEvLoop* loop)
+int evloop_uninit(tEvLoop* loop)
 {
-    check_if(loop == NULL, return EV_ERROR, "loop is null");
-    check_if(loop->is_init != 1, return EV_ERROR, "loop is not init yet");
-    check_if(loop->epfd < 0, return EV_ERROR, "loop->epfd = %d invalid", loop->epfd);
+    check_if(loop == NULL, return EV_FAIL, "loop is null");
+    check_if(loop->is_init != 1, return EV_FAIL, "loop is not init yet");
+    check_if(loop->epfd < 0, return EV_FAIL, "loop->epfd = %d invalid", loop->epfd);
 
     if (loop->is_running)
     {
@@ -284,12 +284,12 @@ tEvStatus evloop_uninit(tEvLoop* loop)
     return EV_OK;
 }
 
-tEvStatus evloop_run(tEvLoop* loop)
+int evloop_run(tEvLoop* loop)
 {
-    check_if(loop == NULL, return EV_ERROR, "loop is null");
-    check_if(loop->is_init != 1, return EV_ERROR, "loop is not init yet");
-    check_if(loop->epfd < 0, return EV_ERROR, "loop->epfd = %d invalid", loop->epfd);
-    check_if(loop->is_running != 0, return EV_ERROR, "loop is already running");
+    check_if(loop == NULL, return EV_FAIL, "loop is null");
+    check_if(loop->is_init != 1, return EV_FAIL, "loop is not init yet");
+    check_if(loop->epfd < 0, return EV_FAIL, "loop->epfd = %d invalid", loop->epfd);
+    check_if(loop->is_running != 0, return EV_FAIL, "loop is already running");
 
     loop->is_running = 1;
     loop->is_still_running = 1;
@@ -299,7 +299,7 @@ tEvStatus evloop_run(tEvLoop* loop)
     memset(evbuf, 0, sizeof(struct epoll_event) * loop->max_ev_num);
 
     loop->queue_fd = eventfd(0, 0);
-    check_if(loop->queue_fd < 0, return EV_ERROR, "eventfd failed");
+    check_if(loop->queue_fd < 0, return EV_FAIL, "eventfd failed");
 
     tEvIo io = {};
     evio_init(&io, _handleInterThreadEv, loop->queue_fd, NULL);
@@ -340,14 +340,14 @@ _ERROR:
     loop->queue_fd = -1;
     loop->is_still_running = 0;
     loop->tid = 0;
-    return EV_ERROR;
+    return EV_FAIL;
 }
 
-tEvStatus evloop_break(tEvLoop* loop)
+int evloop_break(tEvLoop* loop)
 {
-    check_if(loop == NULL, return EV_ERROR, "loop is null");
-    check_if(loop->is_init != 1, return EV_ERROR, "loop is not init yet");
-    check_if(loop->is_running != 1, return EV_ERROR, "loop is not running");
+    check_if(loop == NULL, return EV_FAIL, "loop is null");
+    check_if(loop->is_init != 1, return EV_FAIL, "loop is not init yet");
+    check_if(loop->is_running != 1, return EV_FAIL, "loop is not running");
 
     loop->is_running = 0;
 
@@ -374,11 +374,11 @@ tEvStatus evloop_break(tEvLoop* loop)
 
 ////////////////////////////////////////////////////////////////////////////////
 
-tEvStatus evio_init(tEvIo* io, tEvCallback callback, int fd, void* arg)
+int evio_init(tEvIo* io, tEvCallback callback, int fd, void* arg)
 {
-    check_if(io == NULL, return EV_ERROR, "io is null");
-    check_if(callback == NULL, return EV_ERROR, "callback is null");
-    check_if(fd < 0, return EV_ERROR, "fd = %d invalid", fd);
+    check_if(io == NULL, return EV_FAIL, "io is null");
+    check_if(callback == NULL, return EV_FAIL, "callback is null");
+    check_if(fd < 0, return EV_FAIL, "fd = %d invalid", fd);
 
     memset(io, 0, sizeof(tEvIo));
 
@@ -394,20 +394,20 @@ tEvStatus evio_init(tEvIo* io, tEvCallback callback, int fd, void* arg)
     return EV_OK;
 }
 
-tEvStatus evio_start(tEvLoop* loop, tEvIo* io)
+int evio_start(tEvLoop* loop, tEvIo* io)
 {
-    check_if(loop == NULL, return EV_ERROR, "loop is null");
-    check_if(loop->is_init != 1, return EV_ERROR, "loop is not init yet");
-    check_if(io == NULL, return EV_ERROR, "io is null");
-    check_if(io->is_init != 1, return EV_ERROR, "io is not init yet");
-    check_if(io->is_started != 0, return EV_ERROR, "io is already started");
+    check_if(loop == NULL, return EV_FAIL, "loop is null");
+    check_if(loop->is_init != 1, return EV_FAIL, "loop is not init yet");
+    check_if(io == NULL, return EV_FAIL, "io is null");
+    check_if(io->is_init != 1, return EV_FAIL, "io is not init yet");
+    check_if(io->is_started != 0, return EV_FAIL, "io is already started");
 
     if (pthread_self() != loop->tid)
     {
         return _saveInterThreadAction(loop, io, EV_ACT_IO_START);
     }
 
-    check_if(loop->curr_ev_num >= loop->max_ev_num, return EV_ERROR, "curr_ev_num = %d >= max_ev_num = %d", loop->curr_ev_num, loop->max_ev_num);
+    check_if(loop->curr_ev_num >= loop->max_ev_num, return EV_FAIL, "curr_ev_num = %d >= max_ev_num = %d", loop->curr_ev_num, loop->max_ev_num);
 
     struct epoll_event tmp = {
         .events = EPOLLIN,
@@ -415,7 +415,7 @@ tEvStatus evio_start(tEvLoop* loop, tEvIo* io)
     };
 
     int check = epoll_ctl(loop->epfd, EPOLL_CTL_ADD, io->fd, &tmp);
-    check_if(check < 0, return EV_ERROR, "epoll_ctl add failed");
+    check_if(check < 0, return EV_FAIL, "epoll_ctl add failed");
 
     loop->curr_ev_num++;
     io->loop = loop;
@@ -424,13 +424,13 @@ tEvStatus evio_start(tEvLoop* loop, tEvIo* io)
     return EV_OK;
 }
 
-tEvStatus evio_stop(tEvLoop* loop, tEvIo* io)
+int evio_stop(tEvLoop* loop, tEvIo* io)
 {
-    check_if(loop == NULL, return EV_ERROR, "loop is null");
-    check_if(loop->is_init != 1, return EV_ERROR, "loop is not init yet");
-    check_if(io == NULL, return EV_ERROR, "io is null");
-    check_if(io->is_init != 1, return EV_ERROR, "io is not init yet");
-    check_if(io->is_started != 1, return EV_ERROR, "io is not started");
+    check_if(loop == NULL, return EV_FAIL, "loop is null");
+    check_if(loop->is_init != 1, return EV_FAIL, "loop is not init yet");
+    check_if(io == NULL, return EV_FAIL, "io is null");
+    check_if(io->is_init != 1, return EV_FAIL, "io is not init yet");
+    check_if(io->is_started != 1, return EV_FAIL, "io is not started");
 
     if (pthread_self() != loop->tid)
     {
@@ -444,18 +444,18 @@ tEvStatus evio_stop(tEvLoop* loop, tEvIo* io)
 
     loop->curr_ev_num--;
 
-    check_if(check < 0, return EV_ERROR, "epoll_ctl EPOLL_CTL_DEL failed");
+    check_if(check < 0, return EV_FAIL, "epoll_ctl EPOLL_CTL_DEL failed");
 
     return EV_OK;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 
-tEvStatus evsig_init(tEvSignal* sig, tEvCallback callback, int signum, void* arg)
+int evsig_init(tEvSignal* sig, tEvCallback callback, int signum, void* arg)
 {
-    check_if(sig == NULL, return EV_ERROR, "sig is null");
-    check_if(callback == NULL, return EV_ERROR, "callback is null");
-    check_if(signum <= 0, return EV_ERROR, "signum = %d invalid", signum);
+    check_if(sig == NULL, return EV_FAIL, "sig is null");
+    check_if(callback == NULL, return EV_FAIL, "callback is null");
+    check_if(signum <= 0, return EV_FAIL, "signum = %d invalid", signum);
 
     memset(sig, 0, sizeof(tEvSignal));
 
@@ -473,20 +473,20 @@ tEvStatus evsig_init(tEvSignal* sig, tEvCallback callback, int signum, void* arg
     return EV_OK;
 }
 
-tEvStatus evsig_start(tEvLoop* loop, tEvSignal* sig)
+int evsig_start(tEvLoop* loop, tEvSignal* sig)
 {
-    check_if(loop == NULL, return EV_ERROR, "loop is null");
-    check_if(loop->is_init != 1, return EV_ERROR, "loop is not init yet");
-    check_if(sig == NULL, return EV_ERROR, "sig is null");
-    check_if(sig->is_init != 1, return EV_ERROR, "sig is not init yet");
-    check_if(sig->is_started != 0, return EV_ERROR, "sig is already started");
+    check_if(loop == NULL, return EV_FAIL, "loop is null");
+    check_if(loop->is_init != 1, return EV_FAIL, "loop is not init yet");
+    check_if(sig == NULL, return EV_FAIL, "sig is null");
+    check_if(sig->is_init != 1, return EV_FAIL, "sig is not init yet");
+    check_if(sig->is_started != 0, return EV_FAIL, "sig is already started");
 
     if (pthread_self() != loop->tid)
     {
         return _saveInterThreadAction(loop, sig, EV_ACT_SIGNAL_START);
     }
 
-    check_if(loop->curr_ev_num >= loop->max_ev_num, return EV_ERROR, "curr_ev_num = %d >= max_ev_num = %d", loop->curr_ev_num, loop->max_ev_num);
+    check_if(loop->curr_ev_num >= loop->max_ev_num, return EV_FAIL, "curr_ev_num = %d >= max_ev_num = %d", loop->curr_ev_num, loop->max_ev_num);
 
     sigset_t mask;
     sigemptyset(&mask);
@@ -495,10 +495,10 @@ tEvStatus evsig_start(tEvLoop* loop, tEvSignal* sig)
     // Block the signals thet we handle using signalfd(), so they don't
     // cause signal handlers or default signal actions to execute.
     int check = sigprocmask(SIG_BLOCK, &mask, NULL);
-    check_if(check < 0, return EV_ERROR, "sigprocmask failed");
+    check_if(check < 0, return EV_FAIL, "sigprocmask failed");
 
     sig->fd = signalfd(-1, &mask, 0);
-    check_if(sig->fd <= 0, return EV_ERROR, "signalfd failed");
+    check_if(sig->fd <= 0, return EV_FAIL, "signalfd failed");
 
     struct epoll_event tmp = {
         .events = EPOLLIN,
@@ -520,16 +520,16 @@ _ERROR:
         close(sig->fd);
         sig->fd = -1;
     }
-    return EV_ERROR;
+    return EV_FAIL;
 }
 
-tEvStatus evsig_stop(tEvLoop* loop, tEvSignal* sig)
+int evsig_stop(tEvLoop* loop, tEvSignal* sig)
 {
-    check_if(loop == NULL, return EV_ERROR, "loop is null");
-    check_if(loop->is_init != 1, return EV_ERROR, "loop is not init yet");
-    check_if(sig == NULL, return EV_ERROR, "sig is null");
-    check_if(sig->is_init != 1, return EV_ERROR, "sig is not init yet");
-    check_if(sig->is_started != 1, return EV_ERROR, "sig is not started");
+    check_if(loop == NULL, return EV_FAIL, "loop is null");
+    check_if(loop->is_init != 1, return EV_FAIL, "loop is not init yet");
+    check_if(sig == NULL, return EV_FAIL, "sig is null");
+    check_if(sig->is_init != 1, return EV_FAIL, "sig is not init yet");
+    check_if(sig->is_started != 1, return EV_FAIL, "sig is not started");
 
     if (pthread_self() != loop->tid)
     {
@@ -550,18 +550,18 @@ tEvStatus evsig_stop(tEvLoop* loop, tEvSignal* sig)
     close(sig->fd);
     sig->fd = -1;
 
-    check_if(check < 0, return EV_ERROR, "epoll_ctl EPOLL_CTL_DEL failed");
+    check_if(check < 0, return EV_FAIL, "epoll_ctl EPOLL_CTL_DEL failed");
 
     return EV_OK;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 
-tEvStatus ev_once(tEvLoop* loop, tEvCallback callback, void* arg)
+int ev_once(tEvLoop* loop, tEvCallback callback, void* arg)
 {
-    check_if(callback == NULL, return EV_ERROR, "callback is null");
-    check_if(loop == NULL, return EV_ERROR, "loop is null");
-    check_if(loop->is_init != 1, return EV_ERROR, "loop is not init yet");
+    check_if(callback == NULL, return EV_FAIL, "callback is null");
+    check_if(loop == NULL, return EV_FAIL, "loop is null");
+    check_if(loop->is_init != 1, return EV_FAIL, "loop is not init yet");
 
     /////////////////////////////////////////////
     //  init
@@ -580,11 +580,11 @@ tEvStatus ev_once(tEvLoop* loop, tEvCallback callback, void* arg)
     /////////////////////////////////////////////
     if (pthread_self() != loop->tid)
     {
-        tEvStatus ret = _saveInterThreadAction(loop, once, EV_ACT_ONCE);
+        int ret = _saveInterThreadAction(loop, once, EV_ACT_ONCE);
         if (ret != EV_OK)
         {
             free(once);
-            return EV_ERROR;
+            return EV_FAIL;
         }
         return EV_OK;
     }
@@ -626,16 +626,16 @@ _ERROR:
         }
         free(once);
     }
-    return EV_ERROR;
+    return EV_FAIL;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 
-tEvStatus evtm_init(tEvTimer* tm, tEvCallback callback, int period_ms, void* arg, tEvTimerType timer_type)
+int evtm_init(tEvTimer* tm, tEvCallback callback, int period_ms, void* arg, tEvTimerType timer_type)
 {
-    check_if(tm == NULL, return EV_ERROR, "tm is null");
-    check_if(callback == NULL, return EV_ERROR, "callback is null");
-    check_if(period_ms <= 0, return EV_ERROR, "period_ms = %d invalid", period_ms);
+    check_if(tm == NULL, return EV_FAIL, "tm is null");
+    check_if(callback == NULL, return EV_FAIL, "callback is null");
+    check_if(period_ms <= 0, return EV_FAIL, "period_ms = %d invalid", period_ms);
 
     memset(tm, 0, sizeof(tEvTimer));
 
@@ -654,23 +654,23 @@ tEvStatus evtm_init(tEvTimer* tm, tEvCallback callback, int period_ms, void* arg
     return EV_OK;
 }
 
-tEvStatus evtm_start(tEvLoop* loop, tEvTimer* tm)
+int evtm_start(tEvLoop* loop, tEvTimer* tm)
 {
-    check_if(loop == NULL, return EV_ERROR, "loop is null");
-    check_if(loop->is_init != 1, return EV_ERROR, "loop is not init yet");
-    check_if(tm == NULL, return EV_ERROR, "tm is null");
-    check_if(tm->is_init != 1, return EV_ERROR, "tm is not init yet");
-    check_if(tm->is_started != 0, return EV_ERROR, "tm has been already started");
+    check_if(loop == NULL, return EV_FAIL, "loop is null");
+    check_if(loop->is_init != 1, return EV_FAIL, "loop is not init yet");
+    check_if(tm == NULL, return EV_FAIL, "tm is null");
+    check_if(tm->is_init != 1, return EV_FAIL, "tm is not init yet");
+    check_if(tm->is_started != 0, return EV_FAIL, "tm has been already started");
 
     if (pthread_self() != loop->tid)
     {
         return _saveInterThreadAction(loop, tm, EV_ACT_TIMER_START);
     }
 
-    check_if(loop->curr_ev_num >= loop->max_ev_num, return EV_ERROR, "curr_ev_num = %d >= max_ev_num = %d", loop->curr_ev_num, loop->max_ev_num);
+    check_if(loop->curr_ev_num >= loop->max_ev_num, return EV_FAIL, "curr_ev_num = %d >= max_ev_num = %d", loop->curr_ev_num, loop->max_ev_num);
 
     tm->fd = timerfd_create(CLOCK_MONOTONIC, 0);
-    check_if(tm->fd < 0, return EV_ERROR, "timerfd_create failed");
+    check_if(tm->fd < 0, return EV_FAIL, "timerfd_create failed");
 
     time_t sec  = tm->period_ms / 1000;
     long   nsec = (tm->period_ms % 1000) * 1000 * 1000;
@@ -708,17 +708,17 @@ _ERROR:
         close(tm->fd);
         tm->fd = -1;
     }
-    return EV_ERROR;
+    return EV_FAIL;
 }
 
-tEvStatus evtm_stop(tEvLoop* loop, tEvTimer* tm)
+int evtm_stop(tEvLoop* loop, tEvTimer* tm)
 {
-    check_if(loop == NULL, return EV_ERROR, "loop is null");
-    check_if(loop->is_init != 1, return EV_ERROR, "loop is not init yet");
-    check_if(tm == NULL, return EV_ERROR, "tm is null");
-    check_if(tm->fd <= 0, return EV_ERROR, "fd = %d invalid", tm->fd);
-    check_if(tm->is_init != 1, return EV_ERROR, "tm is not init yet");
-    check_if(tm->is_started != 1, return EV_ERROR, "tm is not started");
+    check_if(loop == NULL, return EV_FAIL, "loop is null");
+    check_if(loop->is_init != 1, return EV_FAIL, "loop is not init yet");
+    check_if(tm == NULL, return EV_FAIL, "tm is null");
+    check_if(tm->fd <= 0, return EV_FAIL, "fd = %d invalid", tm->fd);
+    check_if(tm->is_init != 1, return EV_FAIL, "tm is not init yet");
+    check_if(tm->is_started != 1, return EV_FAIL, "tm is not started");
 
     if (pthread_self() != loop->tid)
     {
@@ -739,20 +739,20 @@ tEvStatus evtm_stop(tEvLoop* loop, tEvTimer* tm)
     close(tm->fd);
     tm->fd = -1;
 
-    check_if(set_chk < 0, return EV_ERROR, "timerfd_settime failed");
-    check_if(ep_chk < 0, return EV_ERROR, "epoll_ctl EPOLL_CTL_DEL failed");
+    check_if(set_chk < 0, return EV_FAIL, "timerfd_settime failed");
+    check_if(ep_chk < 0, return EV_FAIL, "epoll_ctl EPOLL_CTL_DEL failed");
 
     return EV_OK;
 }
 
-tEvStatus evtm_pause(tEvLoop* loop, tEvTimer* tm)
+int evtm_pause(tEvLoop* loop, tEvTimer* tm)
 {
-    check_if(loop == NULL, return EV_ERROR, "loop is null");
-    check_if(loop->is_init != 1, return EV_ERROR, "loop is not init yet");
-    check_if(tm == NULL, return EV_ERROR, "tm is null");
-    check_if(tm->fd <= 0, return EV_ERROR, "fd = %d invalid", tm->fd);
-    check_if(tm->is_init != 1, return EV_ERROR, "tm is not init yet");
-    check_if(tm->is_started != 1, return EV_ERROR, "tm is not started");
+    check_if(loop == NULL, return EV_FAIL, "loop is null");
+    check_if(loop->is_init != 1, return EV_FAIL, "loop is not init yet");
+    check_if(tm == NULL, return EV_FAIL, "tm is null");
+    check_if(tm->fd <= 0, return EV_FAIL, "fd = %d invalid", tm->fd);
+    check_if(tm->is_init != 1, return EV_FAIL, "tm is not init yet");
+    check_if(tm->is_started != 1, return EV_FAIL, "tm is not started");
 
     if (pthread_self() != loop->tid)
     {
@@ -761,35 +761,35 @@ tEvStatus evtm_pause(tEvLoop* loop, tEvTimer* tm)
 
     struct itimerspec tmp = {};
     int get_chk = timerfd_gettime(tm->fd, &tmp);
-    check_if(get_chk < 0, return EV_ERROR, "timerfd_gettime failed");
+    check_if(get_chk < 0, return EV_FAIL, "timerfd_gettime failed");
 
     dprint("sec = %ld, nsec = %ld", tmp.it_value.tv_sec, tmp.it_value.tv_nsec);
 
-    tEvStatus ret = evtm_stop(loop, tm);
-    check_if(ret < 0, return EV_ERROR, "evtm_stop failed");
+    int ret = evtm_stop(loop, tm);
+    check_if(ret < 0, return EV_FAIL, "evtm_stop failed");
 
     tm->rest_time = tmp;
 
     return EV_OK;
 }
 
-tEvStatus evtm_resume(tEvLoop* loop, tEvTimer* tm)
+int evtm_resume(tEvLoop* loop, tEvTimer* tm)
 {
-    check_if(loop == NULL, return EV_ERROR, "loop is null");
-    check_if(loop->is_init != 1, return EV_ERROR, "loop is not init yet");
-    check_if(tm == NULL, return EV_ERROR, "tm is null");
-    check_if(tm->is_init != 1, return EV_ERROR, "tm is not init yet");
-    check_if(tm->is_started != 0, return EV_ERROR, "tm has been already started");
+    check_if(loop == NULL, return EV_FAIL, "loop is null");
+    check_if(loop->is_init != 1, return EV_FAIL, "loop is not init yet");
+    check_if(tm == NULL, return EV_FAIL, "tm is null");
+    check_if(tm->is_init != 1, return EV_FAIL, "tm is not init yet");
+    check_if(tm->is_started != 0, return EV_FAIL, "tm has been already started");
 
     if (pthread_self() != loop->tid)
     {
         return _saveInterThreadAction(loop, tm, EV_ACT_TIMER_RESUME);
     }
 
-    check_if(loop->curr_ev_num >= loop->max_ev_num, return EV_ERROR, "curr_ev_num = %d >= max_ev_num = %d", loop->curr_ev_num, loop->max_ev_num);
+    check_if(loop->curr_ev_num >= loop->max_ev_num, return EV_FAIL, "curr_ev_num = %d >= max_ev_num = %d", loop->curr_ev_num, loop->max_ev_num);
 
     tm->fd = timerfd_create(CLOCK_MONOTONIC, 0);
-    check_if(tm->fd < 0, return EV_ERROR, "timerfd_create failed");
+    check_if(tm->fd < 0, return EV_FAIL, "timerfd_create failed");
 
     int set_chk = timerfd_settime(tm->fd, 0, &tm->rest_time, NULL);
     check_if(set_chk < 0, goto _ERROR, "timerfd_settime failed");
@@ -815,15 +815,15 @@ _ERROR:
         close(tm->fd);
         tm->fd = -1;
     }
-    return EV_ERROR;
+    return EV_FAIL;
 }
 
-tEvStatus evtm_restart(tEvLoop* loop, tEvTimer* tm)
+int evtm_restart(tEvLoop* loop, tEvTimer* tm)
 {
-    check_if(loop == NULL, return EV_ERROR, "loop is null");
-    check_if(loop->is_init != 1, return EV_ERROR, "loop is not init yet");
-    check_if(tm == NULL, return EV_ERROR, "tm is null");
-    check_if(tm->is_init != 1, return EV_ERROR, "tm is not init yet");
+    check_if(loop == NULL, return EV_FAIL, "loop is null");
+    check_if(loop->is_init != 1, return EV_FAIL, "loop is not init yet");
+    check_if(tm == NULL, return EV_FAIL, "tm is null");
+    check_if(tm->is_init != 1, return EV_FAIL, "tm is not init yet");
 
     if (pthread_self() != loop->tid)
     {
@@ -832,12 +832,12 @@ tEvStatus evtm_restart(tEvLoop* loop, tEvTimer* tm)
 
     if (tm->is_started)
     {
-        tEvStatus ret = evtm_stop(loop, tm);
-        check_if(ret != EV_OK, return EV_ERROR, "evtm_stop failed");
+        int ret = evtm_stop(loop, tm);
+        check_if(ret != EV_OK, return EV_FAIL, "evtm_stop failed");
     }
 
-    tEvStatus ret = evtm_start(loop, tm);
-    check_if(ret != EV_OK, return EV_ERROR, "evtm_start failed");
+    int ret = evtm_start(loop, tm);
+    check_if(ret != EV_OK, return EV_FAIL, "evtm_start failed");
 
     return EV_OK;
 }

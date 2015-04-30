@@ -17,14 +17,10 @@
 
 #define EV_TICK_MS (50)
 
+#define EV_OK (0)
+#define EV_FAIL (-1)
+
 ////////////////////////////////////////////////////////////////////////////////
-
-typedef enum
-{
-    EV_OK = 0,
-    EV_ERROR = -1
-
-} tEvStatus;
 
 typedef enum
 {
@@ -127,28 +123,28 @@ typedef tEv tEvOnce;
 
 ////////////////////////////////////////////////////////////////////////////////
 
-tEvStatus evloop_init(tEvLoop* loop, int max_ev_num);
-tEvStatus evloop_uninit(tEvLoop* loop);
-tEvStatus evloop_run(tEvLoop* loop);
-tEvStatus evloop_break(tEvLoop* loop);
+int evloop_init(tEvLoop* loop, int max_ev_num);
+int evloop_uninit(tEvLoop* loop);
+int evloop_run(tEvLoop* loop);
+int evloop_break(tEvLoop* loop);
 
 ////////////////////////////////////////////////////////////////////////////////
 
-tEvStatus ev_once(tEvLoop* loop, tEvCallback callback, void* arg);
+int ev_once(tEvLoop* loop, tEvCallback callback, void* arg);
 
-tEvStatus evio_init(tEvIo* io, tEvCallback callback, int fd, void* arg);
-tEvStatus evio_start(tEvLoop* loop, tEvIo* io);
-tEvStatus evio_stop(tEvLoop* loop, tEvIo* io);
+int evio_init(tEvIo* io, tEvCallback callback, int fd, void* arg);
+int evio_start(tEvLoop* loop, tEvIo* io);
+int evio_stop(tEvLoop* loop, tEvIo* io);
 
-tEvStatus evsig_init(tEvSignal* sig, tEvCallback callback, int signum, void* arg);
-tEvStatus evsig_start(tEvLoop* loop, tEvSignal* sig);
-tEvStatus evsig_stop(tEvLoop* loop, tEvSignal* sig);
+int evsig_init(tEvSignal* sig, tEvCallback callback, int signum, void* arg);
+int evsig_start(tEvLoop* loop, tEvSignal* sig);
+int evsig_stop(tEvLoop* loop, tEvSignal* sig);
 
-tEvStatus evtm_init(tEvTimer* tm, tEvCallback callback, int period_ms, void* arg, tEvTimerType timer_type);
-tEvStatus evtm_start(tEvLoop* loop, tEvTimer* tm);
-tEvStatus evtm_stop(tEvLoop* loop, tEvTimer* tm);
-tEvStatus evtm_pause(tEvLoop* loop, tEvTimer* tm);
-tEvStatus evtm_resume(tEvLoop* loop, tEvTimer* tm);
-tEvStatus evtm_restart(tEvLoop* loop, tEvTimer* tm);
+int evtm_init(tEvTimer* tm, tEvCallback callback, int period_ms, void* arg, tEvTimerType timer_type);
+int evtm_start(tEvLoop* loop, tEvTimer* tm);
+int evtm_stop(tEvLoop* loop, tEvTimer* tm);
+int evtm_pause(tEvLoop* loop, tEvTimer* tm);
+int evtm_resume(tEvLoop* loop, tEvTimer* tm);
+int evtm_restart(tEvLoop* loop, tEvTimer* tm);
 
 #endif //_EVENTS_H_
