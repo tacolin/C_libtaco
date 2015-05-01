@@ -16,7 +16,8 @@ typedef struct tTmfdRec
     int tmfd;
     int fdpair[2];
 
-    long tick;
+    uint64_t expire;
+    // long tick;
     struct itmfdspec value;
 
 } tTmfdRec;
@@ -31,6 +32,77 @@ static pthread_t _tick_thread;
 static int _is_running = 0;
 
 ////////////////////////////////////////////////////////////////////////////////
+
+static int _compareMs(uint64_t ms1, uint64_t ms2)
+{
+    if (ms1 == ms2)
+    {
+        return 0;
+    }
+    else if (ms1 > ms2)
+    {
+        if ((ms1 - ms2) > TMFD_HALF_MAX_TIME_MS)
+        {
+            return 2;  // real case : ms2 > ms1
+        }
+        else
+        {
+            return 1;
+        }
+    }
+    else // ms1 < ms2
+    {
+        if ((ms2 - ms1) > TMFD_HALF_MAX_TIME_MS)
+        {
+            return 1; // real case : ms1 > ms2
+        }
+        else
+        {
+            return 2;
+        }
+    }
+}
+
+static uint64_t _calcExpire(long tv_sec, long tv_nsec)
+{
+    struct timeval curr;
+    gettimeofday(&curr, NULL);
+
+    uint64_t usec = curr.tv_usec + tv_nsec / 1000;
+    uint64_t sec = 0;
+
+    while (usec > 1000000)
+    {
+        usec -= 1000000;
+        sec++;
+    }
+
+    if ((sec + curr.tv_sec + tv_sec) > 1000)
+    {
+        sec = (sec + curr.tv_sec + tv_sec) % 1000;
+    }
+    else
+    {
+        sec = sec + curr.tv_sec + tv_sec;
+    }
+
+    uint64_t expire = sec * 1000 + usec / 1000;
+    return expire;
+}
+
+static int _isTimeTooLong(struct itmfdspec tm)
+{
+    uint64_t ms = tm.it_value.tv_sec * 1000 + tm.it_value.tv_nsec / (1000*1000);
+    uint64_t period_ms = tm.it_interval.tv_sec * 1000 + tm.it_interval.tv_nsec / (1000*1000);
+    if ((ms > TMFD_HALF_MAX_TIME_MS) || (period_ms > TMFD_HALF_MAX_TIME_MS))
+    {
+        return 1;
+    }
+    else
+    {
+        return 0;
+    }
+}
 
 static int _findTmFd(void* content, void* arg)
 {
@@ -62,28 +134,18 @@ static void _addRecToRunningList(tTmfdRec* rec)
     void* obj;
     LIST_FOREACH(&_running_list, obj, target)
     {
-        if ((total_tick + target->tick) > rec->tick)
+        if (_compareMs(target->expire, rec->expire) == 1) // target->expire > rec->expire
         {
             break;
         }
-        total_tick += target->tick;
     }
 
-    rec->tick -= total_tick;
     if (target)
     {
         list_insertTo(&_running_list, target, rec);
-
-        tListObj* obj = list_findObj(&_running_list, NULL, target);
-        for (; obj; obj = list_nextObj(&_running_list, obj))
-        {
-            target = obj->content;
-            target->tick -= rec->tick;
-        }
     }
     else
     {
-        // add to tail
         list_append(&_running_list, rec);
     }
     return;
@@ -95,6 +157,8 @@ static void* _tickRoutine(void* arg)
     tTmfdRec* rec;
     uint64_t dummy;
     ssize_t  dummy_size = sizeof(dummy);
+    uint64_t curr_ms;
+    int ret;
 
     while (_is_running)
     {
@@ -106,8 +170,10 @@ static void* _tickRoutine(void* arg)
         pthread_mutex_lock(&_tmfd_lock);
         while ((rec = list_head(&_running_list)) != NULL)
         {
-            rec->tick -= TMFD_TICK_MS;
-            if (rec->tick > 0)
+            curr_ms = _calcExpire(0, 0);
+            ret = _compareMs(curr_ms, rec->expire);
+            // dprint("curr_ms = %lld, rec->expire = %lld, ret = %d", curr_ms, rec->expire, ret);
+            if (ret == 2)
             {
                 break;
             }
@@ -120,13 +186,13 @@ static void* _tickRoutine(void* arg)
             if ((rec->value.it_interval.tv_sec > 0) || (rec->value.it_interval.tv_nsec > 0))
             {
                 // periodic timer
-                rec->tick = rec->value.it_interval.tv_sec * 1000;
-                rec->tick += rec->value.it_interval.tv_nsec / (1000*1000);
+                rec->expire = _calcExpire(rec->value.it_interval.tv_sec, rec->value.it_interval.tv_nsec);
+                // dprint("periodic rec->expire = %lld", rec->expire);
                 _addRecToRunningList(rec);
             }
             else
             {
-                rec->tick = 0;
+                rec->expire = 0;
                 list_append(&_stopped_list, rec);
             }
         }
@@ -175,7 +241,7 @@ int tmfd_create(int clockid, int flags)
     rec->tmfd      = fdpair[0];
     rec->fdpair[0] = fdpair[0];
     rec->fdpair[1] = fdpair[1];
-    rec->tick      = 0;
+    rec->expire    = 0;
 
     list_append(&_stopped_list, rec);
     return fdpair[0];
@@ -185,6 +251,7 @@ int tmfd_settime(int tmfd, int flags, const struct itmfdspec *new_value, struct 
 {
     check_if(tmfd < 0, return TMFD_FAIL, "tmfd = %d invalid", tmfd);
     check_if(new_value == NULL, return TMFD_FAIL, "new_value is null");
+    check_if(_isTimeTooLong(*new_value) == 1, return TMFD_FAIL, "new_value is too long for tmfd");
 
     pthread_mutex_lock(&_tmfd_lock);
 
@@ -213,7 +280,7 @@ int tmfd_settime(int tmfd, int flags, const struct itmfdspec *new_value, struct 
         goto _END;
     }
 
-    rec->tick = new_value->it_value.tv_sec * 1000 + new_value->it_value.tv_nsec / (1000*1000);
+    rec->expire = _calcExpire(new_value->it_value.tv_sec, new_value->it_value.tv_nsec);
 
     _addRecToRunningList(rec);
 
@@ -243,8 +310,8 @@ int tmfd_gettime(int tmfd, struct itmfdspec *old_value)
         goto _END;
     }
 
-    old_value->it_value.tv_sec  = rec->tick / 1000;
-    old_value->it_value.tv_nsec = (rec->tick % 1000) * 1000 * 1000;
+    old_value->it_value.tv_sec  = rec->expire / 1000;
+    old_value->it_value.tv_nsec = (rec->expire % 1000) * 1000 * 1000;
     old_value->it_interval      = rec->value.it_interval;
 
 _END:

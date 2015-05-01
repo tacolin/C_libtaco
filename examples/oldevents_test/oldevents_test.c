@@ -71,7 +71,7 @@ int main(int argc, char const *argv[])
     fpoll_ctl(fpd, FPOLL_CTL_ADD, _tm1, &ev);
 
     struct itmfdspec timeval = {
-        .it_value.tv_sec = 5,
+        .it_value.tv_sec = 30,
     };
     tmfd_settime(_tm1, 0, &timeval, NULL);
     dprint("_tm1 start");
@@ -84,8 +84,7 @@ int main(int argc, char const *argv[])
     fpoll_ctl(fpd, FPOLL_CTL_ADD, _tm2, &ev);
 
     memset(&timeval, 0, sizeof(struct itmfdspec));
-    timeval.it_value.tv_sec = 1;
-    timeval.it_interval.tv_sec = 1;
+    timeval.it_value.tv_sec = 60;
     tmfd_settime(_tm2, 0, &timeval, NULL);
     dprint("_tm2 start");
     dtrace();
@@ -113,6 +112,11 @@ int main(int argc, char const *argv[])
                 ssize_t dummy_size = sizeof(dummy);
                 read(_tm1, &dummy, dummy_size);
                 dprint("_tm1 timeout");
+
+                memset(&timeval, 0, sizeof(struct itmfdspec));
+                timeval.it_value.tv_sec = 30;
+                tmfd_settime(_tm1, 0, &timeval, NULL);
+
                 dtrace();
             }
             else if (evbuf[i].data.fd == _tm2)
@@ -121,6 +125,11 @@ int main(int argc, char const *argv[])
                 ssize_t dummy_size = sizeof(dummy);
                 read(_tm2, &dummy, dummy_size);
                 dprint("_tm2 timeout");
+
+                memset(&timeval, 0, sizeof(struct itmfdspec));
+                timeval.it_value.tv_sec = 60;
+                tmfd_settime(_tm2, 0, &timeval, NULL);
+
                 dtrace();
 
                 // tm2_count++;

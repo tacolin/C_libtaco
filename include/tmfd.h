@@ -3,8 +3,10 @@
 
 ////////////////////////////////////////////////////////////////////////////////
 
-#define TMFD_TICK_MS (20)
+#define TMFD_MAX_TIME_SEC (1000)  // 1000 sec
+#define TMFD_HALF_MAX_TIME_MS (TMFD_MAX_TIME_SEC*1000/2) // 5000 sec
 
+#define TMFD_TICK_MS (2)
 #define TMFD_CLOCK_MONOTONIC (1)
 
 #define TMFD_OK   (0)
