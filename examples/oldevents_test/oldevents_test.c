@@ -35,7 +35,7 @@ static void _processStdin(int fd)
 
         timeval.it_value.tv_nsec = 500 * 1000 * 1000;
         timeval.it_interval.tv_nsec = 500 * 1000 * 1000;
-        
+
         tmfd_settime(_tm2, 0, &timeval, NULL);
         dtrace();
     }
@@ -84,8 +84,8 @@ int main(int argc, char const *argv[])
     fpoll_ctl(fpd, FPOLL_CTL_ADD, _tm2, &ev);
 
     memset(&timeval, 0, sizeof(struct itmfdspec));
-    timeval.it_value.tv_nsec = 500 * 1000 * 1000;
-    timeval.it_interval.tv_nsec = 500 * 1000 * 1000;
+    timeval.it_value.tv_sec = 1;
+    timeval.it_interval.tv_sec = 1;
     tmfd_settime(_tm2, 0, &timeval, NULL);
     dprint("_tm2 start");
     dtrace();
@@ -123,32 +123,32 @@ int main(int argc, char const *argv[])
                 dprint("_tm2 timeout");
                 dtrace();
 
-                tm2_count++;
-                if (tm2_count >= 10)
-                {
-                    struct itmfdspec tmp = {};
-                    tmfd_settime(_tm2, 0, &tmp, NULL);
-                    dprint("stop _tm2");
-                    tm2_count = 0;
+                // tm2_count++;
+                // if (tm2_count >= 10)
+                // {
+                //     struct itmfdspec tmp = {};
+                //     tmfd_settime(_tm2, 0, &tmp, NULL);
+                //     dprint("stop _tm2");
+                //     tm2_count = 0;
 
-                    for (j=0; j<10; j++)
-                    {
-                        event_tm[j] = tmfd_create(TMFD_CLOCK_MONOTONIC, 0);
+                //     for (j=0; j<10; j++)
+                //     {
+                //         event_tm[j] = tmfd_create(TMFD_CLOCK_MONOTONIC, 0);
 
-                        struct fpoll_event local_ev = {
-                            .events = FPOLLIN,
-                            .data.fd = event_tm[j],
-                        };
+                //         struct fpoll_event local_ev = {
+                //             .events = FPOLLIN,
+                //             .data.fd = event_tm[j],
+                //         };
 
-                        fpoll_ctl(fpd, FPOLL_CTL_ADD, event_tm[j], &local_ev);
+                //         fpoll_ctl(fpd, FPOLL_CTL_ADD, event_tm[j], &local_ev);
 
-                        tmp.it_value.tv_nsec = 100;
-                        tmfd_settime(event_tm[j], 0, &tmp, NULL);
+                //         tmp.it_value.tv_nsec = 100;
+                //         tmfd_settime(event_tm[j], 0, &tmp, NULL);
 
-                        dprint("create fd = %d", event_tm[j]);
-                        dtrace();
-                    }
-                }
+                //         dprint("create fd = %d", event_tm[j]);
+                //         dtrace();
+                //     }
+                // }
             }
             else
             {
@@ -161,7 +161,7 @@ int main(int argc, char const *argv[])
                 struct fpoll_event ev = {};
                 fpoll_ctl(fpd, FPOLL_CTL_DEL, evbuf[i].data.fd, &ev);
 
-                tmfd_close(evbuf[i].data.fd); 
+                tmfd_close(evbuf[i].data.fd);
             }
         }
     }
