@@ -3,123 +3,87 @@
 #include <unistd.h>
 
 #include "basic.h"
-#include "task.h"
+#include "simple_thread.h"
 #include "map.h"
 
-#define MAX_ID_NUM 1000
+#define MAX_ID_NUM 100
 
-static int _running = 1;
-static unsigned int _idPool[MAX_ID_NUM] = {0};
+static unsigned int _pool[MAX_ID_NUM] = {0};
 
-static void _sigIntHandler(int sig_num)
+static void _grab(tMap* map, int thread_no)
 {
-    _running = 0;
-    dprint("stop main()");
-}
-
-static void _grabRoutine(void* task, void* arg)
-{
-    check_if(arg == NULL, return, "arg is null");
-
-    tMap* map = (tMap*)arg;
-    tTask* t = (tTask*)task;
-
     int i;
-    int r;
-    unsigned int tmpid;
-    void* ptr;
-    int ret;
     for (i=0; i<MAX_ID_NUM; i++)
     {
-        r = rand() % (i+1);
-        tmpid = _idPool[r];
-        ptr = map_grab(map, tmpid);
+        // random grab one
+        int r = rand() % (i+1);
+        unsigned int id = _pool[r];
+        void* ptr = map_grab(map, id);
+        dprint("thread %d : grab %d, id = %u, ptr = %p", thread_no, r, id, ptr);
+        usleep(50);
         if (ptr)
         {
-            dprint("task %s: grab %d ok, id = %u, ptr = %p", t->name, i, tmpid, ptr);
+            ptr = map_release(map, id);
+            if (ptr)
+            {
+                dprint("thread %d : release %d, id = %u, ptr = %p", thread_no, r, id, ptr);
+            }
+        }
+    }
+}
+
+static void _grab1(void* arg)
+{
+    _grab((tMap*)arg, 1);
+}
+
+static void _grab2(void* arg)
+{
+    _grab((tMap*)arg, 2);
+}
+
+static void _create(void* arg)
+{
+    tMap* map = (tMap*)arg;
+    int i;
+    for (i=0; i<MAX_ID_NUM; i++)
+    {
+        // add one
+        map_add(map, (void*)((intptr_t)i+1), &_pool[i]);
+        dprint("create %d id = %u", i, _pool[i]);
+        usleep(50);
+
+        // random release one
+        int r = rand() % (i+1);
+        unsigned int id = _pool[r];
+        void* ptr = map_release(map, id);
+        if (ptr)
+        {
+            dprint("release %d, id = %u, ptr = %p", r, id, ptr);
         }
         else
         {
-            dprint("task %s: grab %d failed, id = %u", t->name, i, tmpid);
-        }
-
-        usleep(50);
-
-        if (ptr) map_release(map, tmpid);
-    }
-
-    return;
-}
-
-static void _createRoutine(void* task, void* arg)
-{
-    check_if(arg == NULL, return, "arg is null");
-
-    tMap* map = (tMap*)arg;
-    int i;
-    int r;
-    unsigned int tmpid;
-    void* ptr;
-    int ret;
-
-    for (i=0; i<MAX_ID_NUM; i++)
-    {
-        ret = map_add(map, (void*)((intptr_t)i+1), &_idPool[i]);
-        dprint("create %d id = %d", i, _idPool[i]);
-
-        usleep(50);
-
-        r = rand() % (i+1);
-        tmpid = _idPool[r];
-
-        ptr = map_release(map, tmpid);
-        if (ptr)
-        {
-            dprint("release %d ok id = %u ptr = %p", i, tmpid, ptr);
-        }
-        else
-        {
-            dprint("release %d failed id = %u", i, tmpid);
+            dprint("release %d failed, id = %u", r, id);
         }
     }
-
-    return;
 }
 
 int main(int argc, char const *argv[])
 {
-    signal(SIGINT, _sigIntHandler);
-
-    task_system_init();
-
-    tTask create = {};
-    tTask grab1 = {};
-    tTask grab2 = {};
-    tMap map = {};
+    tMap map;
+    unsigned int tmp[MAX_ID_NUM];
 
     map_init(&map, NULL);
 
-    task_init(&create, "CREATE MAP", _createRoutine, &map, TASK_NORMAL, TASK_ONESHOT);
-    task_init(&grab1, "GRAB 1 MAP", _grabRoutine, &map, TASK_NORMAL, TASK_ONESHOT);
-    task_init(&grab2, "GRAB 2 MAP", _grabRoutine, &map, TASK_NORMAL, TASK_ONESHOT);
+    tThread t[3] = {
+        { _create, &map },
+        { _grab1, &map },
+        { _grab2, &map }
+    };
 
-    task_start(&create);
-    task_start(&grab1);
-    task_start(&grab2);
-
-    int i;
-    for (i = 0; i < 10 & _running; ++i)
-    {
-        sleep(1);
-    }
-
-    task_stop(&create);
-    task_stop(&grab1);
-    task_stop(&grab2);
+    thread_join(t, 3);
 
     map_uninit(&map);
-
-    task_system_uninit();
 
     return 0;
 }

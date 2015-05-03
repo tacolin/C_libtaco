@@ -2,7 +2,7 @@
 #define _MAP_H_
 
 #include "basic.h"
-#include "lock.h"
+#include "frwlock.h"
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -24,7 +24,8 @@ typedef struct tMapSlot
 typedef struct tMap
 {
     unsigned int lastid;
-    tRwlock rwlock;
+    // tRwlock rwlock;
+    tFrwlock rwlock;
     int max_num;
     int num;
 
@@ -44,5 +45,7 @@ int map_add(tMap* map, void* content, unsigned int* pid);
 
 void* map_grab(tMap* map, unsigned int id);
 void* map_release(tMap* map, unsigned int id);
+
+int map_ids(tMap* map, int buf_size, unsigned int* id_buf);
 
 #endif //_MAP_H_
