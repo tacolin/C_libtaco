@@ -2,8 +2,6 @@
 
 #include <unistd.h>
 
-#include "slock.h"
-
 #include <lua5.2/lua.h>
 #include <lua5.2/lauxlib.h>
 
