@@ -3,25 +3,25 @@
 
 #include <pthread.h>
 
-typedef struct tThread
+typedef struct tSthread
 {
     void (*func)(void* arg);
     void* arg;
 
-} tThread;
+} tSthread;
 
-typedef struct tThreadEv
+typedef struct tSthreadEv
 {
     pthread_cond_t cond;
     pthread_mutex_t mutex;
     int flag;
 
-} tThreadEv;
+} tSthreadEv;
 
-void thread_join(tThread* threads, int num);
-void thread_ev_create(tThreadEv* ev);
-void thread_ev_release(tThreadEv* ev);
-void thread_ev_trigger(tThreadEv* ev);
-void thread_ev_wait(tThreadEv* ev);
+void sthread_join(tSthread* threads, int num);
+void sthread_ev_create(tSthreadEv* ev);
+void sthread_ev_release(tSthreadEv* ev);
+void sthread_ev_trigger(tSthreadEv* ev);
+void sthread_ev_wait(tSthreadEv* ev);
 
 #endif //_SIMPLE_THREAD_H_

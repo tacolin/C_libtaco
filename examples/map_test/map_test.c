@@ -75,13 +75,13 @@ int main(int argc, char const *argv[])
 
     map_init(&map, NULL);
 
-    tThread t[3] = {
+    tSthread t[3] = {
         { _create, &map },
         { _grab1, &map },
         { _grab2, &map }
     };
 
-    thread_join(t, 3);
+    sthread_join(t, 3);
 
     map_uninit(&map);
 

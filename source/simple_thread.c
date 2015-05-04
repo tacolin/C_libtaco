@@ -3,12 +3,12 @@
 
 static void* _threadRoutine(void* input)
 {
-    tThread* t = (tThread*)input;
+    tSthread* t = (tSthread*)input;
     t->func(t->arg);
     return NULL;
 }
 
-void thread_join(tThread* threads, int num)
+void sthread_join(tSthread* threads, int num)
 {
     pthread_t tid[num];
     int i, chk;
@@ -26,20 +26,20 @@ void thread_join(tThread* threads, int num)
     return;
 }
 
-void thread_ev_create(tThreadEv* ev)
+void sthread_ev_create(tSthreadEv* ev)
 {
     pthread_mutex_init(&ev->mutex, NULL);
     pthread_cond_init(&ev->cond, NULL);
     ev->flag = 0;
 }
 
-void thread_ev_release(tThreadEv* ev)
+void sthread_ev_release(tSthreadEv* ev)
 {
     pthread_mutex_destroy(&ev->mutex);
     pthread_cond_destroy(&ev->cond);
 }
 
-void thread_ev_trigger(tThreadEv* ev)
+void sthread_ev_trigger(tSthreadEv* ev)
 {
     pthread_mutex_lock(&ev->mutex);
     ev->flag = 1;
@@ -47,7 +47,7 @@ void thread_ev_trigger(tThreadEv* ev)
     pthread_cond_signal(&ev->cond);
 }
 
-void thread_ev_wait(tThreadEv* ev)
+void sthread_ev_wait(tSthreadEv* ev)
 {
     pthread_mutex_lock(&ev->mutex);
     while (ev->flag == 0)
