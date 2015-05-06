@@ -1,13 +1,9 @@
 #ifndef _PACK_H_
 #define _PACK_H_
 
-#include "basic.h"
-
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-
-////////////////////////////////////////////////////////////////////////////////
 
 #define bytes_to_u16(bytes, u16) \
     do { \
@@ -60,8 +56,6 @@
         *((unsigned char*)bytes+6) = ((u64 >>  8) & 0xFF); \
         *((unsigned char*)bytes+7) = ((u64      ) & 0xFF); \
     } while (0)
-
-////////////////////////////////////////////////////////////////////////////////
 
 unsigned int bits_get(void* bytes, int* ofs, int bit_num);
 void bits_put(void* bytes, int* ofs, int bit_num, unsigned int value);

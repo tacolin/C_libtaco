@@ -1,75 +1,73 @@
+#include <stdio.h>
 #include <string.h>
 
 #include "tree.h"
 
-////////////////////////////////////////////////////////////////////////////////
-
 #define TREE_GURAD_CODE 0x55665566
 
-////////////////////////////////////////////////////////////////////////////////
+#define derror(a, b...) fprintf(stderr, "[ERROR] %s(): "a"\n", __func__, ##b)
+#define CHECK_IF(assertion, error_action, ...) \
+{\
+    if (assertion) \
+    { \
+        derror(__VA_ARGS__); \
+        {error_action;} \
+    }\
+}
 
-static int _dfs(void* node, tTreeNodeExecFunc exec_fn)
+static int _dfs(void* node, void (*execfn)(void* node, int layer))
 {
-    check_if(node == NULL, return TREE_FAIL, "node is null");
-    check_if(exec_fn == NULL, return TREE_FAIL, "exec_fn is null");
+    CHECK_IF(node == NULL, return TREE_FAIL, "node is null");
+    CHECK_IF(execfn == NULL, return TREE_FAIL, "execfn is null");
 
-    tTreeHdr* hdr = (tTreeHdr*)node;
-
-    if (exec_fn)
+    struct tree_hdr* hdr = (struct tree_hdr*)node;
+    if (execfn)
     {
-        exec_fn(node, hdr->layer);
+        execfn(node, hdr->layer);
     }
 
-    tListObj* obj;
+    void* obj;
     void* child;
     LIST_FOREACH(&hdr->childs, obj, child)
     {
-        _dfs(child, exec_fn);
+        _dfs(child, execfn);
     }
-
     return TREE_OK;
 }
 
-static int _isNodeClean(void* node)
+static int _is_node_unused(void* node)
 {
-    check_if(node == NULL, return TREE_FAIL, "node is null");
+    CHECK_IF(node == NULL, return 0, "node is null");
 
-    tTreeHdr* hdr = (tTreeHdr*)node;
+    struct tree_hdr* hdr = (struct tree_hdr*)node;
+    if (hdr->is_init && hdr->guard_code == TREE_GURAD_CODE) return 0;
 
-    if (hdr->is_init && hdr->guard_code == TREE_GURAD_CODE)
-    {
-        return TREE_FAIL;
-    }
-
-    return TREE_OK;
+    return 1;
 }
 
-int _initTreeHdr(void* node, void* parent, tTree* tree)
+static int _init_tree_hdr(void* node, void* parent, struct tree* tree)
 {
-    check_if(node == NULL, return TREE_FAIL, "node is null");
-    check_if(tree == NULL, return TREE_FAIL, "tree is null");
-    check_if(_isNodeClean(node) != TREE_OK, return TREE_FAIL, "_isNodeClean failed");
+    CHECK_IF(node == NULL, return TREE_FAIL, "node is null");
+    CHECK_IF(tree == NULL, return TREE_FAIL, "tree is null");
+    CHECK_IF(!_is_node_unused(node), return TREE_FAIL, "_is_node_unused failed");
 
-    tTreeHdr* hdr = (tTreeHdr*)node;
-    hdr->parent = parent;
-    hdr->tree   = tree;
-
+    struct tree_hdr* hdr = (struct tree_hdr*)node;
+    hdr->parent          = parent;
+    hdr->tree            = tree;
     list_init(&hdr->childs, NULL);
-
     hdr->layer      = 0;
     hdr->guard_code = TREE_GURAD_CODE;
     hdr->is_init    = 1;
-
     return TREE_OK;
 }
 
-int _uninitTreeHdr(void* node)
+static int _uninit_tree_hdr(void* node)
 {
-    check_if(node == NULL, return TREE_FAIL, "node is null");
-    tTreeHdr* hdr = (tTreeHdr*)node;
+    CHECK_IF(node == NULL, return TREE_FAIL, "node is null");
 
-    check_if(hdr->is_init != 1, return TREE_FAIL, "node is not init yet");
-    check_if(hdr->guard_code != TREE_GURAD_CODE, return TREE_FAIL, "guard code is error");
+    struct tree_hdr* hdr = (struct tree_hdr*)node;
+    CHECK_IF(hdr->is_init != 1, return TREE_FAIL, "node is not init yet");
+    CHECK_IF(hdr->guard_code != TREE_GURAD_CODE, return TREE_FAIL, "guard code is error");
 
     list_clean(&hdr->childs);
     hdr->tree       = NULL;
@@ -77,228 +75,213 @@ int _uninitTreeHdr(void* node)
     hdr->guard_code = 0;
     hdr->is_init    = 0;
     hdr->layer      = 0;
-
     return TREE_OK;
 }
 
-static int _isLayerBiggerThanMe(void* target, void* me)
+static int _is_layer_bigger_than_me(void* target, void* me)
 {
-    check_if(target == NULL, return LIST_FALSE, "target is null");
-    check_if(me == NULL, return LIST_FALSE, "me is null");
+    CHECK_IF(target == NULL, return 0, "target is null");
+    CHECK_IF(me == NULL, return 0, "me is null");
 
-    tTreeHdr* node = (tTreeHdr*)target;
-    tTreeHdr* mynode = (tTreeHdr*)me;
-
-    return (node->layer > mynode->layer) ? LIST_TRUE : LIST_FALSE;
+    struct tree_hdr* node = (struct tree_hdr*)target;
+    struct tree_hdr* mynode = (struct tree_hdr*)me;
+    return (node->layer > mynode->layer) ? 1 : 0;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-
-int tree_init(tTree* tree, void* root, tTreeNodeCleanFunc clean_fn)
+int tree_init(struct tree* tree, void* root, void (*cleanfn)(void*))
 {
-    check_if(tree == NULL, return TREE_FAIL, "tree is null");
-    check_if(root == NULL, return TREE_FAIL, "root is null");
+    CHECK_IF(tree == NULL, return TREE_FAIL, "tree is null");
+    CHECK_IF(root == NULL, return TREE_FAIL, "root is null");
 
-    memset(tree, 0, sizeof(tTree));
+    memset(tree, 0, sizeof(struct tree));
 
-    int list_ret = list_init(&tree->nodes, clean_fn);
-    check_if(list_ret != LIST_OK, return TREE_FAIL, "list_init failed");
+    int chk = list_init(&tree->nodes, cleanfn);
+    CHECK_IF(chk != LIST_OK, return TREE_FAIL, "list_init failed");
 
-    int tree_ret = _initTreeHdr(root, NULL, tree);
-    check_if(tree_ret != TREE_OK, return TREE_FAIL, "_initTreeHdr failed");
+    chk = _init_tree_hdr(root, NULL, tree);
+    CHECK_IF(chk != TREE_OK, return TREE_FAIL, "_init_tree_hdr failed");
 
-    list_ret = list_append(&tree->nodes, root);
-    check_if(list_ret != LIST_OK, return TREE_FAIL, "list_append root failed");
+    chk = list_append(&tree->nodes, root);
+    CHECK_IF(chk != LIST_OK, return TREE_FAIL, "list_append root failed");
 
     tree->is_init  = 1;
-
     return TREE_OK;
 }
 
-int tree_clean(tTree* tree)
+int tree_clean(struct tree* tree)
 {
-    check_if(tree == NULL, return TREE_FAIL, "tree is null");
-    check_if(tree->is_init != 1, return TREE_FAIL, "tree is not init yet");
+    CHECK_IF(tree == NULL, return TREE_FAIL, "tree is null");
+    CHECK_IF(tree->is_init != 1, return TREE_FAIL, "tree is not init yet");
 
     void* node;
-    tListObj* obj;
+    void* obj;
     LIST_FOREACH(&tree->nodes, obj, node)
     {
-        _uninitTreeHdr(node);
+        _uninit_tree_hdr(node);
     }
-
     list_clean(&tree->nodes);
-
     tree->is_init = 0;
-
     return TREE_OK;
 }
 
 int tree_add(void* parent, void* child)
 {
-    check_if(parent == NULL, return TREE_FAIL, "parent is null");
-    check_if(child == NULL, return TREE_FAIL, "child is null");
-    check_if(parent == child, return TREE_FAIL, "parent = child");
-    check_if(_isNodeClean(child) != TREE_OK, return TREE_FAIL, "child is already in some tree");
+    CHECK_IF(parent == NULL, return TREE_FAIL, "parent is null");
+    CHECK_IF(child == NULL, return TREE_FAIL, "child is null");
+    CHECK_IF(parent == child, return TREE_FAIL, "parent = child");
+    CHECK_IF(!_is_node_unused(child), return TREE_FAIL, "child is already in some tree");
 
-    tTreeHdr* parent_hdr = (tTreeHdr*)parent;
-    tTree* tree          = parent_hdr->tree;
+    struct tree_hdr* parent_hdr = (struct tree_hdr*)parent;
+    struct tree* tree           = parent_hdr->tree;
 
-    int ret = _initTreeHdr(child, parent, tree);
-    check_if(ret != TREE_OK, return TREE_FAIL, "_initTreeHdr failed");
+    int chk = _init_tree_hdr(child, parent, tree);
+    CHECK_IF(chk != TREE_OK, return TREE_FAIL, "_init_tree_hdr failed");
 
-    tTreeHdr* child_hdr  = (tTreeHdr*)child;
+    struct tree_hdr* child_hdr  = (struct tree_hdr*)child;
     child_hdr->layer = parent_hdr->layer + 1;
 
     int list_ret = list_append(&parent_hdr->childs, child);
-    check_if(list_ret != LIST_OK, goto _ERROR, "list_append to parent failed");
+    CHECK_IF(list_ret != LIST_OK, goto _ERROR, "list_append to parent failed");
 
-    tListObj* target_obj = list_findObj(&tree->nodes, _isLayerBiggerThanMe, child);
-    if (target_obj == NULL)
+    struct list_node* target_node = list_find_node(&tree->nodes, _is_layer_bigger_than_me, child);
+    if (target_node == NULL)
     {
-        target_obj = list_tailObj(&tree->nodes);
-        if (target_obj == NULL)
+        target_node = list_tail_node(&tree->nodes);
+        if (target_node == NULL)
         {
             list_ret = list_append(&tree->nodes, child);
-            check_if(list_ret != LIST_OK, goto _ERROR, "list_append to tree failed");
+            CHECK_IF(list_ret != LIST_OK, goto _ERROR, "list_append to tree failed");
         }
         else
         {
-            list_ret = list_appendToObj(&tree->nodes, target_obj, child);
-            check_if(list_ret != LIST_OK, goto _ERROR, "list_appendTo failed");
+            list_ret = list_append_after_node(&tree->nodes, target_node, child);
+            CHECK_IF(list_ret != LIST_OK, goto _ERROR, "list_append_after_node failed");
         }
     }
     else
     {
-        list_ret = list_insertToObj(&tree->nodes, target_obj, child);
-        check_if(list_ret != LIST_OK, goto _ERROR, "list_insertTo failed");
+        list_ret = list_insert_before_node(&tree->nodes, target_node, child);
+        CHECK_IF(list_ret != LIST_OK, goto _ERROR, "list_insert_before_node failed");
     }
-
     return TREE_OK;
 
 _ERROR:
     list_remove(&parent_hdr->childs, child);
     list_remove(&tree->nodes, child);
-    _uninitTreeHdr(child);
+    _uninit_tree_hdr(child);
     return TREE_FAIL;
 }
 
 int tree_remove(void* parent, void* child)
 {
-    check_if(parent == NULL, return TREE_FAIL, "parent is null");
-    check_if(child == NULL, return TREE_FAIL, "child is null");
-    check_if(parent == child, return TREE_FAIL, "parent = child");
-    check_if(_isNodeClean(child) == TREE_OK, return TREE_FAIL, "child is not in any tree");
-    check_if(tree_isLeaf(child) != TREE_OK, return TREE_FAIL, "child is not a leaf");
+    CHECK_IF(parent == NULL, return TREE_FAIL, "parent is null");
+    CHECK_IF(child == NULL, return TREE_FAIL, "child is null");
+    CHECK_IF(parent == child, return TREE_FAIL, "parent = child");
+    CHECK_IF(_is_node_unused(child), return TREE_FAIL, "child is not in any tree");
+    CHECK_IF(!tree_is_leaf(child), return TREE_FAIL, "child is not a leaf");
 
-    tTreeHdr* parent_hdr = (tTreeHdr*)parent;
-    tTree* tree          = parent_hdr->tree;
+    struct tree_hdr* parent_hdr = (struct tree_hdr*)parent;
+    struct tree* tree           = parent_hdr->tree;
+
     int list_ret;
-
     list_ret = list_remove(&parent_hdr->childs, child);
-    check_if(list_ret != LIST_OK, return TREE_FAIL, "child is not born by parent");
+    CHECK_IF(list_ret != LIST_OK, return TREE_FAIL, "child is not born by parent");
 
     list_ret = list_remove(&tree->nodes, child);
-    check_if(list_ret != LIST_OK, return TREE_FAIL, "child is not in this tree");
+    CHECK_IF(list_ret != LIST_OK, return TREE_FAIL, "child is not in this tree");
 
-    return _uninitTreeHdr(child);
+    return _uninit_tree_hdr(child);
 }
 
-int tree_isLeaf(void* node)
+int tree_is_leaf(void* node)
 {
-    check_if(node == NULL, return TREE_FAIL, "node is null");
-    check_if(_isNodeClean(node) == TREE_OK, return TREE_FAIL, "node is not added to any tree");
+    CHECK_IF(node == NULL, return 0, "node is null");
+    CHECK_IF(_is_node_unused(node), return 0, "node is not added to any tree");
 
-    tTreeHdr* hdr = (tTreeHdr*)node;
+    struct tree_hdr* hdr = (struct tree_hdr*)node;
 
-    if (hdr->parent == NULL) return TREE_FAIL; // root
-    if (list_length(&hdr->childs) > 0) return TREE_FAIL; // node has children
+    if (hdr->parent == NULL) return 0; // root
+    if (list_num(&hdr->childs) > 0) return 0; // node has children
 
-    return TREE_OK;
+    return 1;
 }
 
-int tree_isAncestor(void* descendant, void* ancestor)
+int tree_is_ancestor(void* descendant, void* ancestor)
 {
-    check_if(descendant == NULL, return TREE_FAIL, "descendant is null");
-    check_if(ancestor == NULL, return TREE_FAIL, "ancestor is null");
-    check_if(descendant == ancestor, return TREE_FAIL, "descendant = ancestor");
+    CHECK_IF(descendant == NULL, return 0, "descendant is null");
+    CHECK_IF(ancestor == NULL, return 0, "ancestor is null");
+    CHECK_IF(descendant == ancestor, return 0, "descendant = ancestor");
 
-    tTreeHdr* des = (tTreeHdr*)descendant;
-    tTreeHdr* anc = (tTreeHdr*)ancestor;
-    tTreeHdr* node;
+    struct tree_hdr* des = (struct tree_hdr*)descendant;
+    struct tree_hdr* anc = (struct tree_hdr*)ancestor;
+    struct tree_hdr* node;
     for (node = des->parent; node; node = node->parent)
     {
-        if (node == anc)
-        {
-            return TREE_OK;
-        }
+        if (node == anc) return 1;
     }
-    return TREE_FAIL;
+    return 0;
 }
 
-void* tree_commonAncestor(void* node1, void* node2)
+void* tree_common_ancestor(void* node1, void* node2)
 {
-    check_if(node1 == NULL, return NULL, "node1 is null");
-    check_if(node2 == NULL, return NULL, "node2 is null");
-    check_if(node1 == node2, return NULL, "node1 = node2");
+    CHECK_IF(node1 == NULL, return NULL, "node1 is null");
+    CHECK_IF(node2 == NULL, return NULL, "node2 is null");
+    CHECK_IF(node1 == node2, return NULL, "node1 = node2");
 
-    if (TREE_OK == tree_isAncestor(node1, node2))
+    if (tree_is_ancestor(node1, node2))
     {
         return node2;
     }
-    else if (TREE_OK == tree_isAncestor(node2, node1))
+    else if (tree_is_ancestor(node2, node1))
     {
         return node1;
     }
     else
     {
-        tTreeHdr* hdr1 = (tTreeHdr*)node1;
-        tTreeHdr* ancestor;
+        struct tree_hdr* hdr1 = (struct tree_hdr*)node1;
+        struct tree_hdr* ancestor;
         for (ancestor = hdr1->parent; ancestor; ancestor = ancestor->parent)
         {
-            if (TREE_OK == tree_isAncestor(node2, ancestor))
-            {
-                return ancestor;
-            }
+            if (tree_is_ancestor(node2, ancestor)) return ancestor;
         }
     }
 
     return NULL;
 }
 
-int tree_route(void* src, void* dst, tList* route)
+int tree_route(void* src, void* dst, struct list* route)
 {
-    check_if(src == NULL, return TREE_FAIL, "src is null");
-    check_if(dst == NULL, return TREE_FAIL, "dst is null");
-    check_if(src == dst, return TREE_FAIL, "src = dst");
-    check_if(route == NULL, return TREE_FAIL, "route is null");
-    check_if(_isNodeClean(src) == TREE_OK, return TREE_FAIL, "src is not add to tree.");
-    check_if(_isNodeClean(dst) == TREE_OK, return TREE_FAIL, "dst is not add to tree.");
+    CHECK_IF(src == NULL, return TREE_FAIL, "src is null");
+    CHECK_IF(dst == NULL, return TREE_FAIL, "dst is null");
+    CHECK_IF(src == dst, return TREE_FAIL, "src = dst");
+    CHECK_IF(route == NULL, return TREE_FAIL, "route is null");
+    CHECK_IF(_is_node_unused(src), return TREE_FAIL, "src is not add to tree.");
+    CHECK_IF(_is_node_unused(dst), return TREE_FAIL, "dst is not add to tree.");
 
-    tTreeHdr* srchdr = (tTreeHdr*)src;
-    tTreeHdr* dsthdr = (tTreeHdr*)dst;
-    check_if(srchdr->tree != dsthdr->tree, return TREE_FAIL, "src and dst are in diff tree.");
+    struct tree_hdr* srchdr = (struct tree_hdr*)src;
+    struct tree_hdr* dsthdr = (struct tree_hdr*)dst;
+    CHECK_IF(srchdr->tree != dsthdr->tree, return TREE_FAIL, "src and dst are in diff tree.");
 
     list_clean(route);
 
-    void* cmn_ancestor = tree_commonAncestor(src, dst);
-    check_if(cmn_ancestor == NULL, return TREE_FAIL, "no common ancestor");
+    void* cmn_ancestor = tree_common_ancestor(src, dst);
+    CHECK_IF(cmn_ancestor == NULL, return TREE_FAIL, "no common ancestor");
 
-    int ret;
-    tTreeHdr* node;
+    int chk;
+    struct tree_hdr* node;
     for (node = src; node != cmn_ancestor; node = node->parent)
     {
-        ret = list_append(route, node);
-        check_if(ret != LIST_OK, goto _ERROR, "record src to ancestor failed");
+        chk = list_append(route, node);
+        CHECK_IF(chk != LIST_OK, goto _ERROR, "record src to ancestor failed");
     }
 
-    ret = list_append(route, cmn_ancestor);
-    check_if(ret != LIST_OK, goto _ERROR, "record ancestor failed");
+    chk = list_append(route, cmn_ancestor);
+    CHECK_IF(chk != LIST_OK, goto _ERROR, "record ancestor failed");
 
     for (node = dst; node != cmn_ancestor; node = node->parent)
     {
-        ret = list_appendTo(route, cmn_ancestor, node);
-        check_if(ret != LIST_OK, goto _ERROR, "record ancestor to dst failed");
+        chk = list_append_after(route, cmn_ancestor, node);
+        CHECK_IF(chk != LIST_OK, goto _ERROR, "record ancestor to dst failed");
     }
 
     return TREE_OK;
@@ -308,48 +291,47 @@ _ERROR:
     return TREE_FAIL;
 }
 
-int tree_dfs(tTree* tree, tTreeNodeExecFunc exec_fn)
+int tree_dfs(struct tree* tree, void (*execfn)(void* node, int layer))
 {
-    check_if(tree == NULL, return TREE_FAIL, "tree is null");
-    check_if(exec_fn == NULL, return TREE_FAIL, "exec_fn is null");
-    check_if(tree->is_init != 1, return TREE_FAIL, "tree is not init yet");
+    CHECK_IF(tree == NULL, return TREE_FAIL, "tree is null");
+    CHECK_IF(execfn == NULL, return TREE_FAIL, "execfn is null");
+    CHECK_IF(tree->is_init != 1, return TREE_FAIL, "tree is not init yet");
 
     void* root = list_head(&tree->nodes);
-    check_if(root == NULL, return TREE_FAIL, "tree is empty");
+    CHECK_IF(root == NULL, return TREE_FAIL, "tree is empty");
 
-    return _dfs(root, exec_fn);
+    return _dfs(root, execfn);
 }
 
-int tree_bfs(tTree* tree, tTreeNodeExecFunc exec_fn)
+int tree_bfs(struct tree* tree, void (*execfn)(void* node, int layer))
 {
-    check_if(tree == NULL, return TREE_FAIL, "tree is null");
-    check_if(exec_fn == NULL, return TREE_FAIL, "exec_fn is null");
-    check_if(tree->is_init != 1, return TREE_FAIL, "tree is not init yet");
+    CHECK_IF(tree == NULL, return TREE_FAIL, "tree is null");
+    CHECK_IF(execfn == NULL, return TREE_FAIL, "execfn is null");
+    CHECK_IF(tree->is_init != 1, return TREE_FAIL, "tree is not init yet");
 
     void* node;
-    tListObj* obj;
+    void* obj;
     LIST_FOREACH(&tree->nodes, obj, node)
     {
-        exec_fn(node, ((tTreeHdr*)node)->layer);
+        execfn(node, ((struct tree_hdr*)node)->layer);
     }
-
     return TREE_OK;
 }
 
-tList* tree_childs(void* node)
+struct list* tree_childs(void* node)
 {
-    check_if(node == NULL, return NULL, "node is null");
-    check_if(_isNodeClean(node) == TREE_OK, return NULL, "node is not added to any tree");
+    CHECK_IF(node == NULL, return NULL, "node is null");
+    CHECK_IF(_is_node_unused(node), return NULL, "node is not added to any tree");
 
-    tTreeHdr* hdr = (tTreeHdr*)node;
+    struct tree_hdr* hdr = (struct tree_hdr*)node;
     return &(hdr->childs);
 }
 
 void* tree_parent(void* node)
 {
-    check_if(node == NULL, return NULL, "node is null");
-    check_if(_isNodeClean(node) == TREE_OK, return NULL, "node is not added to any tree");
+    CHECK_IF(node == NULL, return NULL, "node is null");
+    CHECK_IF(_is_node_unused(node), return NULL, "node is not added to any tree");
 
-    tTreeHdr* hdr = (tTreeHdr*)node;
+    struct tree_hdr* hdr = (struct tree_hdr*)node;
     return hdr->parent;
 }

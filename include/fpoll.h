@@ -3,8 +3,6 @@
 
 #include <stdint.h>
 
-////////////////////////////////////////////////////////////////////////////////
-
 #define FPOLL_CTL_ADD  (1)
 #define FPOLL_CTL_DEL  (2)
 
@@ -12,8 +10,6 @@
 
 #define FPOLL_OK (0)
 #define FPOLL_FAIL (-1)
-
-////////////////////////////////////////////////////////////////////////////////
 
 typedef struct fpoll_data
 {
@@ -29,8 +25,6 @@ struct fpoll_event
     uint32_t events;
     struct fpoll_data data;
 };
-
-////////////////////////////////////////////////////////////////////////////////
 
 int fpoll_create(int max);
 void fpoll_close(int fpd);

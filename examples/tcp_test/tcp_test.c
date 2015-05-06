@@ -12,16 +12,16 @@ int main(int argc, char const *argv[])
     {
         int port = atoi(argv[1]);
 
-        tTcpServer server = {};
+        struct tcp_server server = {};
         tcp_server_init(&server, NULL, port, 10);
-        
+
         char buffer[256];
         int  recvlen;
         int  sendlen;
 
         while (_running)
         {
-            tTcp tcp = {};
+            struct tcp tcp = {};
             tcp_server_accept(&server, &tcp);
 
             while (1)
@@ -33,7 +33,7 @@ int main(int argc, char const *argv[])
                     break;
                 }
 
-                dprint("rx (%s) from ip(%s) port(%d)", buffer, 
+                dprint("rx (%s) from ip(%s) port(%d)", buffer,
                     tcp.remote.ipv4, tcp.remote.port);
 
                 sendlen = tcp_send(&tcp, buffer, recvlen);
@@ -59,7 +59,7 @@ int main(int argc, char const *argv[])
             local_port = atoi(argv[3]);
         }
 
-        tTcp client = {};
+        struct tcp client = {};
         tcp_client_init(&client, (char*)argv[1], remote_port, local_port);;
 
         char buffer[256];

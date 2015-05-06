@@ -1,51 +1,42 @@
 #ifndef _MAP_H_
 #define _MAP_H_
 
-#include "basic.h"
-#include "frwlock.h"
-
-////////////////////////////////////////////////////////////////////////////////
+#include "rwlock.h"
 
 #define MAP_OK (0)
 #define MAP_FAIL (-1)
 
-////////////////////////////////////////////////////////////////////////////////
+#define MAPID_INVALID (0)
 
-typedef void (*tMapContentCleanFn)(void* content);
+typedef unsigned int mapid;
 
-typedef struct tMapSlot
+struct map_slot
 {
-    unsigned int id;
-    int ref;
-    void* content;
+    mapid id;
+    int   ref;
+    void* data;
+};
 
-} tMapSlot;
-
-typedef struct tMap
+struct map
 {
-    unsigned int lastid;
-    // tRwlock rwlock;
-    tFrwlock rwlock;
+    mapid lastid;
+    struct rwlock lock;
+
     int max_num;
     int num;
 
-    tMapSlot* slots;
-    tMapContentCleanFn cleanfn;
+    struct map_slot* slots;
+    void (*cleanfn)(void* data);
 
     int is_init;
+};
 
-} tMap;
+int map_init(struct map* map, void (*cleanfn)(void*));
+int map_uninit(struct map* map);
 
-////////////////////////////////////////////////////////////////////////////////
+mapid map_new(struct map* map, void *data);
 
-int map_init(tMap* map, tMapContentCleanFn cleanfn);
-int map_uninit(tMap* map);
-
-int map_add(tMap* map, void* content, unsigned int* pid);
-
-void* map_grab(tMap* map, unsigned int id);
-void* map_release(tMap* map, unsigned int id);
-
-int map_ids(tMap* map, int buf_size, unsigned int* id_buf);
+void* map_grab(struct map* map, mapid id);
+void* map_release(struct map* map, mapid id);
 
 #endif //_MAP_H_

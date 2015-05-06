@@ -5,20 +5,16 @@
 #include <stdlib.h>
 #include <string.h>
 
-////////////////////////////////////////////////////////////////////////////////
-
 #define OK   (0)
 #define FAIL (-1)
 #define TRUE  (1)
 #define FALSE (0)
 
-////////////////////////////////////////////////////////////////////////////////
-
 #define dtrace() do { struct timeval _now = {}; gettimeofday(&_now, NULL); fprintf(stdout, "(%3lds,%3ldms), tid = %lu, line %4d, %s()\n", _now.tv_sec % 1000, _now.tv_usec/1000, (unsigned long)pthread_self(), __LINE__, __func__); } while(0)
 #define dprint(a, b...) fprintf(stdout, "%s(): "a"\n", __func__, ##b)
 #define derror(a, b...) fprintf(stderr, "[ERROR] %s(): "a"\n", __func__, ##b)
 
-#define check_if(assertion, error_action, ...) \
+#define CHECK_IF(assertion, error_action, ...) \
 {\
     if (assertion) \
     { \

@@ -5,7 +5,7 @@
 #include <string.h>
 
 static int _running = 1;
-static tUnTcpServer _server = {};
+static struct untcp_server _server = {};
 
 static void _sigIntHandler(int sig_num)
 {
@@ -21,14 +21,14 @@ int main(int argc, char const *argv[])
     if (argc == 2)
     {
         untcp_server_init(&_server, (char*)argv[1], 10);
-        
+
         char buffer[256];
         int  recvlen;
         int  sendlen;
 
         while (_running)
         {
-            tUnTcp untcp = {};
+            struct untcp untcp = {};
             untcp_server_accept(&_server, &untcp);
 
             while (1)
@@ -57,7 +57,7 @@ int main(int argc, char const *argv[])
     }
     else if (argc == 3)
     {
-        tUnTcp client = {};
+        struct untcp client = {};
         untcp_client_init(&client, (char*)argv[1]);
 
         char buffer[256];

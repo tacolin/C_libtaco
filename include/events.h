@@ -2,149 +2,64 @@
 #define _EVENTS_H_
 
 #include <pthread.h>
-#include <sys/epoll.h>
 #include <sys/timerfd.h>
 #include <sys/signalfd.h>
 #include <sys/eventfd.h>
-#include <signal.h>
 
-////////////////////////////////////////////////////////////////////////////////
-
-#include "basic.h"
-#include "queue.h"
-
-////////////////////////////////////////////////////////////////////////////////
-
-#define EV_TICK_MS (50)
+#include "fast_queue.h"
 
 #define EV_OK (0)
 #define EV_FAIL (-1)
 
-////////////////////////////////////////////////////////////////////////////////
-
-typedef enum
+struct evloop
 {
-    EV_IO,
-    EV_TIMER,
-    EV_SIGNAL,
-    EV_ONCE,
-
-    EV_TYPES
-
-} tEvType;
-
-typedef enum
-{
-    EV_TIMER_ONESHOT,
-    EV_TIMER_PERIODIC,
-
-    EV_TIMER_TYPES
-
-} tEvTimerType;
-
-typedef enum
-{
-    EV_ACT_INVALID = 0,
-
-    EV_ACT_IO_START,
-    EV_ACT_IO_STOP,
-
-    EV_ACT_TIMER_START,
-    EV_ACT_TIMER_STOP,
-    EV_ACT_TIMER_PAUSE,
-    EV_ACT_TIMER_RESUME,
-    EV_ACT_TIMER_RESTART,
-
-    EV_ACT_SIGNAL_START,
-    EV_ACT_SIGNAL_STOP,
-
-    EV_ACT_ONCE,
-
-    EV_ACTIONS
-
-} tEvAction;
-
-////////////////////////////////////////////////////////////////////////////////
-
-typedef struct tEvLoop
-{
-    int queue_fd;
-    tQueue inter_thread_queue;
-
     int epfd;
     int max_ev_num;
-    int curr_ev_num;
+    int state;
 
-    int is_init;
-    int is_running;
-    int is_still_running;
+    int qfd;
+    struct fqueue* act_queue;
 
     pthread_t tid;
+};
 
-} tEvLoop;
-
-struct tEv;
-
-typedef void (*tEvCallback)(tEvLoop* loop, struct tEv* ev, void* arg);
-
-typedef struct tEv
+struct ev
 {
-    tEvLoop*    loop;
-    tEvType     type;
-    int         fd;
-    void*       arg;
-    tEvCallback callback;
-    int         is_init;
-    int         is_started;
+    int fd;
+    int type;
 
-    ///////////////////////////////////
-    // for timer
-    ///////////////////////////////////
-    struct itimerspec rest_time;
-    long period_ms;
-    tEvTimerType timer_type;
+    void* arg;
+    void (*callback)(struct evloop* loop, struct ev* ev, void* arg);
 
-    ///////////////////////////////////
-    // for signal
-    ///////////////////////////////////
-    int signum;
+    union
+    {
+        int signum;
+        struct
+        {
+            int time_ms;
+            int interval_ms;
+        };
+    };
+};
 
-    ///////////////////////////////////
-    // for inter thread queue
-    ///////////////////////////////////
-    tEvAction action;
+int evloop_init(struct evloop* loop, int max_ev_num);
+void evloop_uninit(struct evloop* loop);
 
-} tEv;
+void evloop_run(struct evloop* loop);
+void evloop_break(struct evloop* loop);
 
-typedef tEv tEvIo;
-typedef tEv tEvTimer;
-typedef tEv tEvSignal;
-typedef tEv tEvOnce;
+int evio_init(struct ev* ev, int fd, void (*callback)(struct evloop*, struct ev*, void*), void* arg);
+int evio_start(struct evloop* loop, struct ev* ev);
+void evio_stop(struct evloop* loop, struct ev* ev);
 
-////////////////////////////////////////////////////////////////////////////////
+int evsig_init(struct ev* ev, int signum, void (*callback)(struct evloop*, struct ev*, void*), void* arg);
+int evsig_start(struct evloop* loop, struct ev* ev);
+void evsig_stop(struct evloop* loop, struct ev* ev);
 
-int evloop_init(tEvLoop* loop, int max_ev_num);
-int evloop_uninit(tEvLoop* loop);
-int evloop_run(tEvLoop* loop);
-int evloop_break(tEvLoop* loop);
+int evtm_init(struct ev* ev, int time_ms, int interval_ms, void (*callback)(struct evloop*, struct ev*, void*), void* arg);
+int evtm_start(struct evloop* loop, struct ev* ev);
+void evtm_stop(struct evloop* loop, struct ev* ev);
 
-////////////////////////////////////////////////////////////////////////////////
-
-int ev_once(tEvLoop* loop, tEvCallback callback, void* arg);
-
-int evio_init(tEvIo* io, tEvCallback callback, int fd, void* arg);
-int evio_start(tEvLoop* loop, tEvIo* io);
-int evio_stop(tEvLoop* loop, tEvIo* io);
-
-int evsig_init(tEvSignal* sig, tEvCallback callback, int signum, void* arg);
-int evsig_start(tEvLoop* loop, tEvSignal* sig);
-int evsig_stop(tEvLoop* loop, tEvSignal* sig);
-
-int evtm_init(tEvTimer* tm, tEvCallback callback, int period_ms, void* arg, tEvTimerType timer_type);
-int evtm_start(tEvLoop* loop, tEvTimer* tm);
-int evtm_stop(tEvLoop* loop, tEvTimer* tm);
-int evtm_pause(tEvLoop* loop, tEvTimer* tm);
-int evtm_resume(tEvLoop* loop, tEvTimer* tm);
-int evtm_restart(tEvLoop* loop, tEvTimer* tm);
+int ev_send(struct evloop* loop, void (*callback)(struct evloop*, struct ev*, void*), void* arg);
 
 #endif //_EVENTS_H_

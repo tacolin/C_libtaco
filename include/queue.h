@@ -1,65 +1,43 @@
 #ifndef _QUEUE_H_
 #define _QUEUE_H_
 
-#include "basic.h"
-#include <pthread.h>
 #include <semaphore.h>
-
-////////////////////////////////////////////////////////////////////////////////
 
 #define QUEUE_OK (0)
 #define QUEUE_FAIL (-1)
 
-////////////////////////////////////////////////////////////////////////////////
+#define QUEUE_FLAG_PUSH_BLOCK (0x0001)
+#define QUEUE_FLAG_POP_BLOCK  (0x0010)
 
-typedef enum
+#define QUEUE_FOREACH(pqueue, _data) for (_data = queue_pop(pqueue); _data; _data = queue_pop(pqueue))
+
+struct queue_node
 {
-    QUEUE_SUSPEND = 1,
-    QUEUE_UNSUSPEND = 0
+    struct queue_node* next;
+    void* data;
+};
 
-} tQueueSuspend;
-
-typedef struct tQueueObj
+struct queue
 {
-    void* content;
-    struct tQueueObj* next_obj;
+    struct queue_node* head;
+    struct queue_node* tail;
 
-} tQueueObj;
+    int depth;
+    int num;
 
-typedef void (*tQueueContentCleanFn)(void* obj_content);
-
-typedef struct tQueue
-{
-    int max_obj_num;
-    int curr_obj_num;
-
-    tQueueObj *head;
-    tQueueObj *tail;
-
-    sem_t obj_sem;
+    sem_t num_sem;
     sem_t empty_sem;
+    int lock;
+    int flag;
 
-    int is_put_suspend;
-    int is_get_suspend;
+    void (*cleanfn)(void* data);
+};
 
-    pthread_mutex_t lock;
+int queue_init(struct queue* q, int depth, void (*cleanfn)(void*), int flag);
+void queue_clean(struct queue* q);
 
-    tQueueContentCleanFn cleanfn;
+int queue_push(struct queue* q, void *data);
+void* queue_pop(struct queue* q);
 
-} tQueue;
-
-////////////////////////////////////////////////////////////////////////////////
-
-int queue_init(tQueue *queue, int max_queue_depth,
-                tQueueContentCleanFn clean_func,
-                tQueueSuspend is_put_suspend,
-                tQueueSuspend is_get_suspend);
-
-void queue_clean(tQueue *queue);
-
-int queue_push(tQueue* queue, void* content);
-void* queue_pop(tQueue* queue);
-
-int queue_length(tQueue* queue);
-
+int queue_num(struct queue* q);
 #endif //_QUEUE_H_

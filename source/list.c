@@ -1,330 +1,308 @@
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
 #include "list.h"
 
-#include <string.h>
+#define derror(a, b...) fprintf(stderr, "[ERROR] %s(): "a"\n", __func__, ##b)
 
-////////////////////////////////////////////////////////////////////////////////
+#define CHECK_IF(assertion, error_action, ...) \
+{\
+    if (assertion) \
+    { \
+        derror(__VA_ARGS__); \
+        {error_action;} \
+    }\
+}
 
-static int _checkList(tList* list)
+static int _check_list(struct list* list)
 {
     if (list == NULL) return LIST_FAIL;
-
     if (list->num > 0)
     {
         if ((list->head == NULL) || (list->tail == NULL)) return LIST_FAIL;
     }
-    else // num == 0
+    else
     {
         if ((list->head) || (list->tail)) return LIST_FAIL;
     }
-
     return LIST_OK;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-
-int list_init(tList* list, tListContentCleanFn cleanfn)
+int list_init(struct list* list, void (*cleanfn)(void*))
 {
-    check_if(list == NULL, return LIST_FAIL, "list is null");
-
-    memset(list, 0, sizeof(tList));
-
+    CHECK_IF(list == NULL, return LIST_FAIL, "list is null");
+    memset(list, 0, sizeof(struct list));
     list->cleanfn = cleanfn;
-
     return LIST_OK;
 }
 
-void list_clean(tList* list)
+void list_clean(struct list* list)
 {
-    check_if(list == NULL, return, "list is null");
-
-    tListObj* obj = list->head;
-    tListObj* next;
-
-    while (obj)
+    CHECK_IF(list == NULL, return, "list is null");
+    struct list_node* node = list_head_node(list);
+    struct list_node* next;
+    while (node)
     {
-        next = obj->next;
+        next = list_next_node(node);
         if (list->cleanfn)
         {
-            list->cleanfn(obj->content);
+            list->cleanfn(node->data);
         }
-        free(obj);
-        obj = next;
+        free(node);
+        node = next;
     }
-
     list->head = NULL;
     list->tail = NULL;
     list->num  = 0;
-
     return;
 }
 
-int list_insert(tList* list, void* content)
+int list_append(struct list* list, void* data)
 {
-    check_if(list == NULL, return LIST_FAIL, "list is null");
-    check_if(content == NULL, return LIST_FAIL, "content is null");
-    check_if(_checkList(list) != LIST_OK, return LIST_FAIL, "_checkList failed");
-    check_if(list_find(list, NULL, content) != NULL, return LIST_FAIL, "content is already in list");
+    CHECK_IF(list == NULL, return LIST_FAIL, "list is null");
+    CHECK_IF(data == NULL, return LIST_FAIL, "data is null");
+    CHECK_IF(_check_list(list) != LIST_OK, return LIST_FAIL, "_check_list failed");
 
-    tListObj* obj = calloc(sizeof(tListObj), 1);
-    obj->content = content;
-
-    if (list->head)
-    {
-        list->head->prev = obj;
-        obj->next = list->head;
-        list->head = obj;
-    }
-    else
-    {
-        list->head = obj;
-        list->tail = obj;
-    }
-
-    list->num++;
-
-    return LIST_OK;
-}
-
-int list_append(tList* list, void* content)
-{
-    check_if(list == NULL, return LIST_FAIL, "list is null");
-    check_if(content == NULL, return LIST_FAIL, "content is null");
-    check_if(_checkList(list) != LIST_OK, return LIST_FAIL, "_checkList failed");
-    // check_if(list_find(list, NULL, content) != NULL, return LIST_FAIL, "content is already in list");
-
-    tListObj* obj = calloc(sizeof(tListObj), 1);
-    obj->content = content;
-
+    struct list_node* node = calloc(sizeof(struct list_node), 1);
+    node->data = data;
     if (list->tail)
     {
-        list->tail->next = obj;
-        obj->prev = list->tail;
-        list->tail = obj;
+        list->tail->next = node;
+        node->prev = list->tail;
+        list->tail = node;
     }
     else
     {
-        list->head = obj;
-        list->tail = obj;
+        list->head = node;
+        list->tail = node;
     }
-
     list->num++;
-
     return LIST_OK;
 }
 
-int list_remove(tList* list, void* content)
+int list_insert(struct list* list, void* data)
 {
-    check_if(list == NULL, return LIST_FAIL, "list is null");
-    check_if(content == NULL, return LIST_FAIL, "content is null");
-    check_if(_checkList(list) != LIST_OK, return LIST_FAIL, "_checkList failed");
+    CHECK_IF(list == NULL, return LIST_FAIL, "list is null");
+    CHECK_IF(data == NULL, return LIST_FAIL, "data is null");
+    CHECK_IF(_check_list(list) != LIST_OK, return LIST_FAIL, "_check_list failed");
 
-    tListObj* obj = list_findObj(list, NULL, content);
-    check_if(obj == NULL, return LIST_FAIL, "content is not in this list");
+    struct list_node* node = calloc(sizeof(struct list_node), 1);
+    node->data = data;
+    if (list->head)
+    {
+        list->head->prev = node;
+        node->next = list->head;
+        list->head = node;
+    }
+    else
+    {
+        list->head = node;
+        list->tail = node;
+    }
+    list->num++;
+    return LIST_OK;
+}
 
-    if (obj->prev && obj->next) // middle
+struct list_node* list_find_node(struct list* list, int (*findfn)(void*, void*), void* arg)
+{
+    CHECK_IF(list == NULL, return NULL, "list is null");
+    CHECK_IF(_check_list(list) != LIST_OK, return NULL, "_check_list failed");
+
+    void* node;
+    void* data;
+    LIST_FOREACH(list, node, data)
     {
-        obj->prev->next = obj->next;
-        obj->next->prev = obj->prev;
+        if (findfn)
+        {
+            if (findfn(data, arg)) break;
+        }
+        else
+        {
+            if (data == arg) break;
+        }
     }
-    else if (obj->next) // head
+    return node;
+}
+
+int list_remove_node(struct list* list, struct list_node* node)
+{
+    CHECK_IF(list == NULL, return LIST_FAIL, "list is null");
+    CHECK_IF(node == NULL, return LIST_FAIL, "node is null");
+    CHECK_IF(_check_list(list) != LIST_OK, return LIST_FAIL, "_check_list failed");
+
+    if (node->prev && node->next) // middle
     {
-        obj->next->prev = NULL;
-        list->head = obj->next;
+        node->prev->next = node->next;
+        node->next->prev = node->prev;
     }
-    else if (obj->prev) // tail
+    else if (node->next) // head
     {
-        obj->prev->next = NULL;
-        list->tail = obj->prev;
+        node->next->prev = NULL;
+        list->head = node->next;
+    }
+    else if (node->prev) // tail
+    {
+        node->prev->next = NULL;
+        list->tail = node->prev;
     }
     else // both tail and head, list num = 1
     {
         list->tail = NULL;
         list->head = NULL;
     }
-
     list->num--;
-
-    free(obj);
-
     return LIST_OK;
 }
 
-tListObj* list_headObj(tList* list)
+void* list_find(struct list* list, int (*findfn)(void*, void*), void* arg)
 {
-    check_if(list == NULL, return NULL, "list is null");
-    check_if(_checkList(list) != LIST_OK, return NULL, "_checkList failed");
+    struct list_node* node = list_find_node(list, findfn, arg);
+    if (node == NULL) return NULL;
+    return node->data;
+}
 
+int list_remove(struct list* list, void* data)
+{
+    struct list_node* node = list_find_node(list, NULL, data);
+    if (node == NULL) return LIST_FAIL;
+
+    int ret = list_remove_node(list, node);
+    free(node);
+    return ret;
+}
+
+struct list_node* list_head_node(struct list* list)
+{
+    CHECK_IF(list == NULL, return NULL, "list is null");
+    CHECK_IF(_check_list(list) != LIST_OK, return NULL, "_check_list failed");
     return list->head;
 }
 
-void* list_head(tList* list)
+struct list_node* list_tail_node(struct list* list)
 {
-    tListObj* obj = list_headObj(list);
-    return (obj != NULL) ? obj->content : NULL;
-}
-
-tListObj* list_tailObj(tList* list)
-{
-    check_if(list == NULL, return NULL, "list is null");
-    check_if(_checkList(list) != LIST_OK, return NULL, "_checkList failed");
-
+    CHECK_IF(list == NULL, return NULL, "list is null");
+    CHECK_IF(_check_list(list) != LIST_OK, return NULL, "_check_list failed");
     return list->tail;
 }
 
-void* list_tail(tList* list)
+void* list_head(struct list* list)
 {
-    tListObj* obj = list_tailObj(list);
-    return (obj != NULL) ? obj->content : NULL;
+    struct list_node* node = list_head_node(list);
+    if (node == NULL) return NULL;
+    return node->data;
 }
 
-tListObj* list_prevObj(tList* list, tListObj* obj)
+void* list_tail(struct list* list)
 {
-    check_if(list == NULL, return NULL, "list is null");
-    check_if(obj == NULL, return NULL, "obj is null");
-    check_if(_checkList(list) != LIST_OK, return NULL, "_checkList failed");
-
-    return obj->prev;
+    struct list_node* node = list_tail_node(list);
+    if (node == NULL) return NULL;
+    return node->data;
 }
 
-void* list_prev(tList* list, void* content)
+struct list_node* list_prev_node(struct list_node* node)
 {
-    tListObj* obj = list_findObj(list, NULL, content);
-    check_if(obj == NULL, return NULL, "content is not in this list");
-
-    tListObj* prev_obj = list_prevObj(list, obj);
-    return (prev_obj != NULL) ? prev_obj->content : NULL;
+    CHECK_IF(node == NULL, return NULL, "node is null");
+    return node->prev;
 }
 
-tListObj* list_nextObj(tList* list, tListObj* obj)
+struct list_node* list_next_node(struct list_node* node)
 {
-    check_if(list == NULL, return NULL, "list is null");
-    check_if(obj == NULL, return NULL, "obj is null");
-    check_if(_checkList(list) != LIST_OK, return NULL, "_checkList failed");
-
-    return obj->next;
+    CHECK_IF(node == NULL, return NULL, "node is null");
+    return node->next;
 }
 
-void* list_next(tList* list, void* content)
+void* list_prev(struct list* list, void* data)
 {
-    tListObj* obj = list_findObj(list, NULL, content);
-    check_if(obj == NULL, return NULL, "content is not in this list");
+    struct list_node* node = list_find_node(list, NULL, data);
+    if (node == NULL) return NULL;
+    struct list_node* prev = list_prev_node(node);
+    if (prev == NULL) return NULL;
 
-    tListObj* next_obj = list_nextObj(list, obj);
-    return (next_obj != NULL) ? next_obj->content : NULL;
+    return prev->data;
 }
 
-tListObj* list_findObj(tList* list, tListContentFindFn find_fn, void* arg)
+void* list_next(struct list* list, void* data)
 {
-    check_if(list == NULL, return NULL, "list is null");
-    check_if(_checkList(list) != LIST_OK, return NULL, "_checkList failed");
+    struct list_node* node = list_find_node(list, NULL, data);
+    if (node == NULL) return NULL;
+    struct list_node* next = list_next_node(node);
+    if (next == NULL) return NULL;
 
-    tListObj* obj = list->head;
-    while (obj)
-    {
-        if (find_fn)
-        {
-            if (find_fn(obj->content, arg) == LIST_TRUE)
-            {
-                goto _END;
-            }
-        }
-        else
-        {
-            if (obj->content == arg)
-            {
-                goto _END;
-            }
-        }
-
-        obj = obj->next;
-    }
-
-_END:
-    return obj;
+    return next->data;
 }
 
-void* list_find(tList* list, tListContentFindFn find_fn, void* arg)
+int list_num(struct list* list)
 {
-    tListObj* obj = list_findObj(list, find_fn, arg);
-    return (obj != NULL) ? obj->content : NULL;
-}
-
-int  list_length(tList* list)
-{
-    check_if(list == NULL, return -1, "list is null");
-    check_if(_checkList(list) != LIST_OK, return -1, "_checkList failed");
-
+    CHECK_IF(list == NULL, return -1, "list is null");
+    CHECK_IF(_check_list(list) != LIST_OK, return -1, "_check_list failed");
     return list->num;
 }
 
-int list_insertToObj(tList* list, tListObj* target_obj, void* content)
+int list_append_after_node(struct list* list, struct list_node* target_node, void* data)
 {
-    check_if(list == NULL, return LIST_FAIL, "list is null");
-    check_if(content == NULL, return LIST_FAIL, "content is null");
-    check_if(_checkList(list) != LIST_OK, return LIST_FAIL, "_checkList failed");
-    check_if(target_obj == NULL, return LIST_FAIL, "target_obj is null");
-    check_if(list_find(list, NULL, content) != NULL, return LIST_FAIL, "content is already in list");
+    CHECK_IF(list == NULL, return LIST_FAIL, "list is null");
+    CHECK_IF(target_node == NULL, return LIST_FAIL, "target_node is null");
+    CHECK_IF(data == NULL, return LIST_FAIL, "data is null");
+    CHECK_IF(_check_list(list) != LIST_OK, return LIST_FAIL, "_check_list failed");
 
-    if (target_obj->prev)
+    if (target_node->next)
     {
-        tListObj* newobj = calloc(sizeof(tListObj), 1);
-        newobj->content = content;
+        struct list_node* node  = calloc(sizeof(struct list_node), 1);
+        node->data              = data;
 
-        target_obj->prev->next = newobj;
-        newobj->prev = target_obj->prev;
+        target_node->next->prev = node;
+        node->next              = target_node->next;
 
-        target_obj->prev = newobj;
-        newobj->next = target_obj;
+        target_node->next       = node;
+        node->prev              = target_node;
+
         list->num++;
-
-        return LIST_OK;
-    }
-    else // target is head
-    {
-        return list_insert(list, content);
-    }
-}
-
-int list_insertTo(tList* list, void* target, void* content)
-{
-    tListObj* obj = list_findObj(list, NULL, target);
-    check_if(obj == NULL, return LIST_FAIL, "target is not in this list");
-
-    return list_insertToObj(list, obj, content);
-}
-
-int list_appendToObj(tList* list, tListObj* target_obj, void* content)
-{
-    check_if(list == NULL, return LIST_FAIL, "list is null");
-    check_if(target_obj == NULL, return LIST_FAIL, "target_obj is null");
-    check_if(content == NULL, return LIST_FAIL, "content is null");
-    check_if(_checkList(list) != LIST_OK, return LIST_FAIL, "_checkList failed");
-    check_if(list_find(list, NULL, content) != NULL, return LIST_FAIL, "content is already in list");
-
-    if (target_obj->next)
-    {
-        tListObj* newobj = calloc(sizeof(tListObj), 1);
-        newobj->content = content;
-
-        target_obj->next->prev = newobj;
-        newobj->next = target_obj->next;
-
-        target_obj->next = newobj;
-        newobj->prev = target_obj;
-        list->num++;
-
         return LIST_OK;
     }
     else // target is tail
     {
-        return list_append(list, content);
+        return list_append(list, data);
     }
 }
 
-int list_appendTo(tList* list, void* target, void* content)
+int list_insert_before_node(struct list* list, struct list_node* target_node, void* data)
 {
-    tListObj* obj = list_findObj(list, NULL, target);
-    check_if(obj == NULL, return LIST_FAIL, "target is not in this list");
+    CHECK_IF(list == NULL, return LIST_FAIL, "list is null");
+    CHECK_IF(target_node == NULL, return LIST_FAIL, "target_node is null");
+    CHECK_IF(data == NULL, return LIST_FAIL, "data is null");
+    CHECK_IF(_check_list(list) != LIST_OK, return LIST_FAIL, "_check_list failed");
 
-    return list_appendToObj(list, obj, content);
+    if (target_node->prev)
+    {
+        struct list_node* node  = calloc(sizeof(struct list_node), 1);
+        node->data              = data;
+
+        target_node->prev->next = node;
+        node->prev              = target_node->prev;
+
+        target_node->prev       = node;
+        node->next              = target_node;
+
+        list->num++;
+        return LIST_OK;
+    }
+    else // target is head
+    {
+        return list_insert(list, data);
+    }
+}
+
+int list_append_after(struct list* list, void* target, void* data)
+{
+    struct list_node* node = list_find_node(list, NULL, target);
+    if (node == NULL) return LIST_FAIL;
+    return list_append_after_node(list, node, data);
+}
+
+int list_insert_before(struct list* list, void* target, void* data)
+{
+    struct list_node* node = list_find_node(list, NULL, target);
+    if (node == NULL) return LIST_FAIL;
+    return list_insert_before_node(list, node, data);
 }

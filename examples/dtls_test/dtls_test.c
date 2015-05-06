@@ -7,7 +7,7 @@
 #include <sys/select.h>
 
 static int _running = 1;
-static tDtlsServer _server = {};
+static struct dtls_server _server = {};
 
 static void _sigIntHandler(int sig_num)
 {
@@ -18,8 +18,8 @@ static void _sigIntHandler(int sig_num)
 
 static void _destroyDtls(void* arg)
 {
-    check_if(arg == NULL, return, "arg is null");
-    tDtls* dtls = (tDtls*)arg;
+    CHECK_IF(arg == NULL, return, "arg is null");
+    struct dtls* dtls = (struct dtls*)arg;
     dtls_client_uninit(dtls);
     free(dtls);
     return;
@@ -27,10 +27,9 @@ static void _destroyDtls(void* arg)
 
 static void _runDtlsClient(char* remote_ip, int remote_port, int local_port)
 {
-    tDtls client = {};
+    struct dtls client = {};
 
-    dtls_client_init(&client, remote_ip, remote_port, local_port,
-                     "certs/client-cert.pem", "certs/client-key.pem", 10);
+    dtls_client_init(&client, remote_ip, remote_port, local_port, "certs/client-cert.pem", "certs/client-key.pem", 10);
 
     char buffer[256];
     int sendlen;
@@ -64,8 +63,7 @@ static void _runDtlsClient(char* remote_ip, int remote_port, int local_port)
 
 static void _runDtlsServer(int local_port)
 {
-    dtls_server_init(&_server, NULL, local_port,
-                     "certs/server-cert.pem", "certs/server-key.pem", 10);
+    dtls_server_init(&_server, NULL, local_port, "certs/server-cert.pem", "certs/server-key.pem", 10);
 
     char buffer[256];
     int  recvlen;
@@ -74,9 +72,9 @@ static void _runDtlsServer(int local_port)
     struct timeval timeout = {};
     int            sel_ret;
     fd_set         readset;
-    tList          dtls_list;
-    tDtls*         dtls    = NULL;
-    tListObj*      obj;
+    struct list    dtls_list;
+    struct dtls*   dtls    = NULL;
+    struct list_node* node;
 
     list_init(&dtls_list, _destroyDtls);
 
@@ -88,7 +86,7 @@ static void _runDtlsServer(int local_port)
         FD_ZERO(&readset);
         FD_SET(_server.fd, &readset);
 
-        LIST_FOREACH(&dtls_list, obj, dtls)
+        LIST_FOREACH(&dtls_list, node, dtls)
         {
             FD_SET(dtls->fd, &readset);
         }
@@ -100,7 +98,7 @@ static void _runDtlsServer(int local_port)
         }
         else if (sel_ret > 0)
         {
-            LIST_FOREACH(&dtls_list, obj, dtls)
+            LIST_FOREACH(&dtls_list, node, dtls)
             {
                 if (FD_ISSET(dtls->fd, &readset))
                 {
@@ -131,7 +129,7 @@ static void _runDtlsServer(int local_port)
 
             if (FD_ISSET(_server.fd, &readset))
             {
-                dtls = calloc(sizeof(tDtls), 1);
+                dtls = calloc(sizeof(struct dtls), 1);
                 dtls_server_accept(&_server, dtls);
                 list_append(&dtls_list, dtls);
             }

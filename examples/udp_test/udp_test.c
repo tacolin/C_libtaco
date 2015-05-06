@@ -12,13 +12,13 @@ int main(int argc, char const *argv[])
     {
         int port = atoi(argv[1]);
 
-        tUdp server = {};
+        struct udp server = {};
         udp_init(&server, NULL, port);
 
         char buffer[256];
         int  recvlen;
         int  sendlen;
-        tUdpAddr remote;
+        struct udp_addr remote;
 
         while (_running)
         {
@@ -52,7 +52,7 @@ int main(int argc, char const *argv[])
             local_port = atoi(argv[3]);
         }
 
-        tUdp client = {};
+        struct udp client = {};
 
         udp_init(&client, NULL, local_port);
 
@@ -60,7 +60,7 @@ int main(int argc, char const *argv[])
         int sendlen;
         int i;
         int recvlen;
-        tUdpAddr remote;
+        struct udp_addr remote;
 
         snprintf(remote.ipv4, INET_ADDRSTRLEN, "%s", argv[1]);
         remote.port = remote_port;

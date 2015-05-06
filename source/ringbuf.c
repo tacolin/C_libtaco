@@ -1,7 +1,20 @@
-#include "ringbuf.h"
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
-static void _increaseRb(tRingBuf* rb, int* pos, int* msb)
+#include "ringbuf.h"
+
+#define derror(a, b...) fprintf(stderr, "[ERROR] %s(): "a"\n", __func__, ##b)
+#define CHECK_IF(assertion, error_action, ...) \
+{\
+    if (assertion) \
+    { \
+        derror(__VA_ARGS__); \
+        {error_action;} \
+    }\
+}
+
+static void _increase_rb(struct ringbuf* rb, int* pos, int* msb)
 {
     *pos = *pos + 1;
     if (*pos == rb->size)
@@ -11,36 +24,31 @@ static void _increaseRb(tRingBuf* rb, int* pos, int* msb)
     }
 }
 
-int ringbuf_isFull(tRingBuf* rb)
+int ringbuf_full(struct ringbuf* rb)
 {
-    check_if(rb == NULL, return 1, "rb is null");
-    check_if(rb->size <= 0, return 1, "rb_size = %d invalid", rb->size);
-
+    CHECK_IF(rb == NULL, return 1, "rb is null");
+    CHECK_IF(rb->size <= 0, return 1, "rb_size = %d invalid", rb->size);
     return (rb->end == rb->start) && (rb->e_msb != rb->s_msb);
 }
 
-int ringbuf_isEmpty(tRingBuf* rb)
+int ringbuf_empty(struct ringbuf* rb)
 {
-    check_if(rb == NULL, return 1, "rb is null");
-    check_if(rb->size <= 0, return 1, "rb_size = %d invalid", rb->size);
-
+    CHECK_IF(rb == NULL, return 1, "rb is null");
+    CHECK_IF(rb->size <= 0, return 1, "rb_size = %d invalid", rb->size);
     return (rb->end == rb->start) && (rb->e_msb == rb->s_msb);
 }
 
-int ringbuf_init(tRingBuf* rb, int rb_size, int elem_size, void* elements)
+int ringbuf_init(struct ringbuf* rb, int rb_size, int elem_size, void* elements)
 {
-    check_if(rb == NULL, return RB_FAIL, "rb is null");
-    check_if(rb_size <= 0, return RB_FAIL, "rb_size = %d invalid", rb_size);
-    check_if(elem_size <= 0, return RB_FAIL, "elem_size = %d invalid", elem_size);
-
-    // memset(rb, 0, sizeof(tRingBuf));
+    CHECK_IF(rb == NULL, return RB_FAIL, "rb is null");
+    CHECK_IF(rb_size <= 0, return RB_FAIL, "rb_size = %d invalid", rb_size);
+    CHECK_IF(elem_size <= 0, return RB_FAIL, "elem_size = %d invalid", elem_size);
 
     rb->size  = rb_size;
     rb->start = 0;
     rb->end   = 0;
     rb->s_msb = 0;
     rb->e_msb = 0;
-
     if (elements)
     {
         rb->elements = elements;
@@ -49,117 +57,109 @@ int ringbuf_init(tRingBuf* rb, int rb_size, int elem_size, void* elements)
     else
     {
         rb->elements = calloc(elem_size, rb_size);
-        check_if(rb->elements == NULL, return RB_FAIL, "calloc failed");
+        CHECK_IF(rb->elements == NULL, return RB_FAIL, "calloc failed");
         rb->is_need_free = 1;
     }
-
     rb->elem_size = elem_size;
-
     return RB_OK;
 }
 
-int ringbuf_uninit(tRingBuf* rb)
+int ringbuf_uninit(struct ringbuf* rb)
 {
-    check_if(rb == NULL, return RB_FAIL, "rb is null");
+    CHECK_IF(rb == NULL, return RB_FAIL, "rb is null");
 
     if (rb->elements && rb->is_need_free)
     {
         free(rb->elements);
     }
-
-    memset(rb, 0, sizeof(tRingBuf));
+    memset(rb, 0, sizeof(struct ringbuf));
     return RB_OK;
 }
 
-void* ringbuf_preWrite(tRingBuf* rb)
+void* ringbuf_pre_write(struct ringbuf* rb)
 {
-    check_if(rb == NULL, return NULL, "rb is null");
-    check_if(rb->size <= 0, return NULL, "rb->size = %d invalid", rb->size);
-    check_if(rb->elements == NULL, return NULL, "rb->elements is null");
-
+    CHECK_IF(rb == NULL, return NULL, "rb is null");
+    CHECK_IF(rb->size <= 0, return NULL, "rb->size = %d invalid", rb->size);
+    CHECK_IF(rb->elements == NULL, return NULL, "rb->elements is null");
     return rb->elements + rb->elem_size * rb->end;
 }
 
-int ringbuf_postWrite(tRingBuf* rb)
+int ringbuf_post_write(struct ringbuf* rb)
 {
-    check_if(rb == NULL, return RB_FAIL, "rb is null");
-    check_if(rb->size <= 0, return RB_FAIL, "rb->size = %d invalid", rb->size);
-    check_if(rb->elements == NULL, return RB_FAIL, "rb->elements is null");
+    CHECK_IF(rb == NULL, return RB_FAIL, "rb is null");
+    CHECK_IF(rb->size <= 0, return RB_FAIL, "rb->size = %d invalid", rb->size);
+    CHECK_IF(rb->elements == NULL, return RB_FAIL, "rb->elements is null");
 
-    if (ringbuf_isFull(rb)) _increaseRb(rb, &rb->start, &rb->s_msb);
+    if (ringbuf_full(rb)) _increase_rb(rb, &rb->start, &rb->s_msb);
 
-    _increaseRb(rb, &rb->end, &rb->e_msb);
-
+    _increase_rb(rb, &rb->end, &rb->e_msb);
     return RB_OK;
 }
 
-int ringbuf_write(tRingBuf* rb, void* input)
+int ringbuf_write(struct ringbuf* rb, void* input)
 {
-    check_if(input == NULL, return RB_FAIL, "input is null");
-    // ringbuf_preWrite will do the rest input checks
+    CHECK_IF(input == NULL, return RB_FAIL, "input is null");
+    // ringbuf_pre_write will do the rest input checks
 
-    void* elem = ringbuf_preWrite(rb);
+    void* elem = ringbuf_pre_write(rb);
     if (elem == NULL) return RB_FAIL;
 
     memcpy(elem, input, rb->elem_size);
-
-    return ringbuf_postWrite(rb);
+    return ringbuf_post_write(rb);
 }
 
-void* ringbuf_preRead(tRingBuf* rb)
+void* ringbuf_pre_read(struct ringbuf* rb)
 {
-    check_if(rb == NULL, return NULL, "rb is null");
-    check_if(rb->size <= 0, return NULL, "rb->size = %d invalid", rb->size);
-    check_if(rb->elements == NULL, return NULL, "rb->elements is null");
+    CHECK_IF(rb == NULL, return NULL, "rb is null");
+    CHECK_IF(rb->size <= 0, return NULL, "rb->size = %d invalid", rb->size);
+    CHECK_IF(rb->elements == NULL, return NULL, "rb->elements is null");
 
-    if (ringbuf_isEmpty(rb)) return NULL;
+    if (ringbuf_empty(rb)) return NULL;
 
     return rb->elements + rb->elem_size * rb->start;
 }
 
-int ringbuf_postRead(tRingBuf* rb)
+int ringbuf_post_read(struct ringbuf* rb)
 {
-    check_if(rb == NULL, return RB_FAIL, "rb is null");
-    check_if(rb->size <= 0, return RB_FAIL, "rb->size = %d invalid", rb->size);
-    check_if(rb->elements == NULL, return RB_FAIL, "rb->elements is null");
+    CHECK_IF(rb == NULL, return RB_FAIL, "rb is null");
+    CHECK_IF(rb->size <= 0, return RB_FAIL, "rb->size = %d invalid", rb->size);
+    CHECK_IF(rb->elements == NULL, return RB_FAIL, "rb->elements is null");
 
-    if (ringbuf_isEmpty(rb)) return RB_FAIL;
+    if (ringbuf_empty(rb)) return RB_FAIL;
 
-    _increaseRb(rb, &rb->start, &rb->s_msb);
-
+    _increase_rb(rb, &rb->start, &rb->s_msb);
     return RB_OK;
 }
 
-int ringbuf_read(tRingBuf* rb, void* output)
+int ringbuf_read(struct ringbuf* rb, void* output)
 {
-    check_if(output == NULL, return RB_FAIL, "output is null");
-    // ringbuf_preRead will do the rest input checks
+    CHECK_IF(output == NULL, return RB_FAIL, "output is null");
+    // ringbuf_pre_read will do the rest input checks
 
-    void* elem = ringbuf_preRead(rb);
+    void* elem = ringbuf_pre_read(rb);
     if (elem == NULL) return RB_FAIL;
 
     memcpy(output, elem, rb->elem_size);
-
-    return ringbuf_postRead(rb);
+    return ringbuf_post_read(rb);
 }
 
-void* ringbuf_tail(tRingBuf* rb)
+void* ringbuf_tail(struct ringbuf* rb)
 {
-    check_if(rb == NULL, return NULL, "rb is null");
-    check_if(rb->size <= 0, return NULL, "rb->size = %d invalid", rb->size);
-    check_if(rb->elements == NULL, return NULL, "rb->elements is null");
+    CHECK_IF(rb == NULL, return NULL, "rb is null");
+    CHECK_IF(rb->size <= 0, return NULL, "rb->size = %d invalid", rb->size);
+    CHECK_IF(rb->elements == NULL, return NULL, "rb->elements is null");
 
     if (rb->end == 0) rb->elements + rb->elem_size * (rb->size - 1);
 
     return rb->elements + rb->elem_size * rb->end;
 }
 
-void* ringbuf_prev(tRingBuf* rb, void* elem)
+void* ringbuf_prev(struct ringbuf* rb, void* elem)
 {
-    check_if(rb == NULL, return NULL, "rb is null");
-    check_if(elem == NULL, return NULL, "elem is null");
-    check_if(rb->size <= 0, return NULL, "rb->size = %d invalid", rb->size);
-    check_if(rb->elements == NULL, return NULL, "rb->elements is null");
+    CHECK_IF(rb == NULL, return NULL, "rb is null");
+    CHECK_IF(elem == NULL, return NULL, "elem is null");
+    CHECK_IF(rb->size <= 0, return NULL, "rb->size = %d invalid", rb->size);
+    CHECK_IF(rb->elements == NULL, return NULL, "rb->elements is null");
 
     if (rb->elements == elem) return rb->elements + rb->elem_size * (rb->size - 1);
 

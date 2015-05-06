@@ -1,6 +1,6 @@
 cmake_minimum_required( VERSION 2.8.3 )
 
-project(lua_test)
+project(fpoll_tmfd_test)
 
 taco_get_header_dirs(${CMAKE_CURRENT_LIST_DIR} _hdr_dirs)
 include_directories(${_hdr_dirs})
@@ -26,10 +26,8 @@ set_target_properties( ${PROJECT_NAME} PROPERTIES LINKER_LANGUAGE C )
 add_dependencies( ${PROJECT_NAME} taco )
 
 target_link_libraries( ${PROJECT_NAME} taco )
-target_link_libraries( ${PROJECT_NAME} lua5.2 )
 
 install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION "${APP_INSTALL_DIR}")
-install(FILES "file.lua" DESTINATION "${APP_INSTALL_DIR}")
 
 add_custom_target("run-${PROJECT_NAME}"
                   DEPENDS ${PROJECT_NAME} taco)

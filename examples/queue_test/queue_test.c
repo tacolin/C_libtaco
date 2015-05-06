@@ -1,44 +1,89 @@
+#include <stdint.h>
 #include "basic.h"
 #include "queue.h"
+#include "thread.h"
+
+static void _cleanFn(void* content)
+{
+    dprint("content = %p", content);
+}
+
+static void _producer(void* arg)
+{
+    struct queue* q = (struct queue*)arg;
+    int i;
+    for (i=0; i<100; i++)
+    {
+        queue_push(q, (void*)(intptr_t)(i+1));
+        dprint("i = %d data = %p", i, (void*)(intptr_t)(i+1));
+        usleep(10);
+    }
+}
+
+static void _consumer(void* arg)
+{
+    struct queue* q = (struct queue*)arg;
+    int i;
+    void* data;
+    for (i=0; i<100; i++)
+    {
+        data = queue_pop(q);
+        dprint("i = %d data = %p", i, data);
+        usleep(100);
+    }
+}
 
 int main(int argc, char const *argv[])
 {
-    tQueue queue;
+    struct queue q;
+    queue_init(&q, -1, NULL, 0);
 
-    queue_init(&queue, 5, NULL, QUEUE_UNSUSPEND, QUEUE_UNSUSPEND);
+    queue_push(&q, (void*)(intptr_t)1);
+    queue_push(&q, (void*)(intptr_t)2);
+    queue_push(&q, (void*)(intptr_t)3);
+    queue_push(&q, (void*)(intptr_t)4);
+    queue_push(&q, (void*)(intptr_t)5);
+    queue_push(&q, (void*)(intptr_t)6);
 
-    queue_push(&queue, (void*)1);
-    queue_push(&queue, (void*)2);
-    queue_push(&queue, (void*)3);
-    queue_push(&queue, (void*)4);
-    queue_push(&queue, (void*)5);
-    queue_push(&queue, (void*)6);
+    dprint("queue_num = %d", queue_num(&q));
 
-    dprint("show 1, 2, 3, 4, 5");
-
-    long* get = NULL;
-    for (get = queue_pop(&queue); get != NULL; get = queue_pop(&queue))
+    void* data;
+    QUEUE_FOREACH(&q, data)
     {
-        dprint("get = %ld", (long)get);
+        dprint("data = %p", data);
+    }
+    queue_clean(&q);
+
+    queue_init(&q, 3, _cleanFn, 0);
+
+    queue_push(&q, (void*)(intptr_t)10);
+    queue_push(&q, (void*)(intptr_t)20);
+    queue_push(&q, (void*)(intptr_t)30);
+    int chk = queue_push(&q, (void*)(intptr_t)40);
+    dprint("chk = %d", chk);
+
+    dprint("queue_num = %d", queue_num(&q));
+
+    QUEUE_FOREACH(&q, data)
+    {
+        dprint("data = %p", data);
     }
 
-    long a = 10;
-    long b = 20;
-    long c = 30;
+    queue_clean(&q);
 
-    queue_push(&queue, &c);
-    queue_push(&queue, &b);
-    queue_push(&queue, &a);
+    queue_init(&q, 5, NULL, QUEUE_FLAG_PUSH_BLOCK | QUEUE_FLAG_POP_BLOCK);
+    // queue_init(&q, 5, NULL, QUEUE_FLAG_POP_BLOCK);
+    // queue_init(&q, 5, NULL, QUEUE_FLAG_PUSH_BLOCK);
 
-    dprint("show 30, 20, 10");
-    for (get = queue_pop(&queue); get != NULL; get = queue_pop(&queue))
-    {
-        dprint("get = %ld", *get);
-    }
+    struct thread t[2] = {
+        {_producer, &q},
+        {_consumer, &q}
+    };
 
-    queue_clean(&queue);
+    thread_join(t, 2);
+
+    queue_clean(&q);
 
     dprint("ok");
-
     return 0;
 }

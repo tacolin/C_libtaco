@@ -1,18 +1,32 @@
+#include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
-#include <pthread.h>
 #include <sys/types.h>
 #include <sys/time.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 
-#include "basic.h"
 #include "list.h"
 #include "tmfd.h"
 
-////////////////////////////////////////////////////////////////////////////////
+#define atom_spinlock(ptr) while (__sync_lock_test_and_set(ptr,1)) {}
+#define atom_spinunlock(ptr) __sync_lock_release(ptr)
 
-typedef struct tTmfdRec
+#define LOCK() atom_spinlock(&_tmfd_lock)
+#define UNLOCK() atom_spinunlock(&_tmfd_lock)
+
+#define derror(a, b...) fprintf(stderr, "[ERROR] %s(): "a"\n", __func__, ##b)
+#define CHECK_IF(assertion, error_action, ...) \
+{\
+    if (assertion) \
+    { \
+        derror(__VA_ARGS__); \
+        {error_action;} \
+    }\
+}
+
+struct tmfd_rec
 {
     int tmfd;
     int fdpair[2];
@@ -20,56 +34,50 @@ typedef struct tTmfdRec
     struct timeval expire;
     struct itmfdspec value;
 
-} tTmfdRec;
+};
 
-////////////////////////////////////////////////////////////////////////////////
-
-static pthread_mutex_t _tmfd_lock;
-static tList _running_list;
-static tList _stopped_list;
+static int _tmfd_lock = 0;
+static struct list _running_list;
+static struct list _stopped_list;
 
 static pthread_t _tick_thread;
 static int _is_running = 0;
 
-////////////////////////////////////////////////////////////////////////////////
-
-static int _findTmFd(void* content, void* arg)
+static int _find_tmfd_rec(void* data, void* arg)
 {
-    check_if(content == NULL, return LIST_FALSE, "content is null");
-    check_if(arg == NULL, return LIST_FALSE, "arg is null");
+    CHECK_IF(data == NULL, return 0, "data is null");
+    CHECK_IF(arg == NULL, return 0, "arg is null");
 
-    tTmfdRec* rec = (tTmfdRec*)content;
+    struct tmfd_rec* rec = (struct tmfd_rec*)data;
     int tmfd = *((int*)arg);
-    return (rec->tmfd == tmfd) ? LIST_TRUE : LIST_FALSE ;
+    return (rec->tmfd == tmfd) ? 1 : 0 ;
 }
 
-static void _cleanTmFdRec(void* content)
+static void _clean_tmfd_rec(void* data)
 {
-    check_if(content == NULL, return, "content is null");
-    tTmfdRec* rec = (tTmfdRec*)content;
+    CHECK_IF(data == NULL, return, "data is null");
+
+    struct tmfd_rec* rec = (struct tmfd_rec*)data;
     close(rec->fdpair[0]);
     close(rec->fdpair[1]);
-    free(content);
+    free(data);
     return;
 }
 
-static void _addRecToRunningList(tTmfdRec* rec)
+static void _add_rec_to_running_list(struct tmfd_rec* rec)
 {
-    check_if(rec == NULL, return, "rec is null");
+    CHECK_IF(rec == NULL, return, "rec is null");
 
-    tTmfdRec* target;
+    struct tmfd_rec* target;
     void* obj;
     LIST_FOREACH(&_running_list, obj, target)
     {
-        if (timercmp(&(target->expire), &(rec->expire), >))
-        {
-            break;
-        }
+        if (timercmp(&(target->expire), &(rec->expire), >)) break;
     }
 
     if (target)
     {
-        list_insertTo(&_running_list, target, rec);
+        list_insert_before(&_running_list, target, rec);
     }
     else
     {
@@ -79,10 +87,10 @@ static void _addRecToRunningList(tTmfdRec* rec)
     return;
 }
 
-static void* _tickRoutine(void* arg)
+static void* _tick_routine(void* arg)
 {
     struct timeval period;
-    tTmfdRec* rec;
+    struct tmfd_rec* rec;
     uint64_t dummy;
     ssize_t  dummy_size = sizeof(dummy);
     struct timeval curr;
@@ -94,18 +102,13 @@ static void* _tickRoutine(void* arg)
 
         select(0, 0, 0, 0, &period);
 
-        pthread_mutex_lock(&_tmfd_lock);
+        LOCK();
         while ((rec = list_head(&_running_list)) != NULL)
         {
             gettimeofday(&curr, NULL);
 
-            if (timercmp(&curr, &(rec->expire), <))
-            {
-                break;
-            }
+            if (timercmp(&curr, &(rec->expire), <)) break;
 
-            dprint("curr = %3ld sec, %3ld ms", curr.tv_sec % 1000, curr.tv_usec / 1000);
-            dprint("rec->expire = %3ld sec, %3ld ms", rec->expire.tv_sec % 1000, rec->expire.tv_usec / 1000);
 
             dummy = 1;
             write(rec->fdpair[1], &dummy, dummy_size);
@@ -119,7 +122,7 @@ static void* _tickRoutine(void* arg)
                 time_val.tv_sec = rec->value.it_interval.tv_sec;
                 time_val.tv_usec = rec->value.it_interval.tv_nsec / 1000;
                 timeradd(&(rec->expire), &time_val, &(rec->expire));
-                _addRecToRunningList(rec);
+                _add_rec_to_running_list(rec);
             }
             else
             {
@@ -127,9 +130,8 @@ static void* _tickRoutine(void* arg)
                 list_append(&_stopped_list, rec);
             }
         }
-        pthread_mutex_unlock(&_tmfd_lock);
+        UNLOCK();
     }
-
     pthread_exit(NULL);
     return NULL;
 }
@@ -137,12 +139,11 @@ static void* _tickRoutine(void* arg)
 int tmfd_system_init(void)
 {
     pthread_mutex_init(&_tmfd_lock, NULL);
-    list_init(&_running_list, _cleanTmFdRec);
-    list_init(&_stopped_list, _cleanTmFdRec);
+    list_init(&_running_list, _clean_tmfd_rec);
+    list_init(&_stopped_list, _clean_tmfd_rec);
 
     _is_running = 1;
-    pthread_create(&_tick_thread, NULL, _tickRoutine, NULL);
-
+    pthread_create(&_tick_thread, NULL, _tick_routine, NULL);
     return TMFD_OK;
 }
 
@@ -151,24 +152,22 @@ void tmfd_system_uninit(void)
     _is_running = 0;
     pthread_join(_tick_thread, NULL);
 
-    pthread_mutex_lock(&_tmfd_lock);
+    LOCK();
     list_clean(&_running_list);
     list_clean(&_stopped_list);
-    pthread_mutex_unlock(&_tmfd_lock);
-    pthread_mutex_destroy(&_tmfd_lock);
-
+    UNLOCK();
     return;
 }
 
 int tmfd_create(int clockid, int flags)
 {
-    check_if(clockid != TMFD_CLOCK_MONOTONIC, return TMFD_FAIL, "clockid shall be TMFD_CLOCK_MONOTONIC");
+    CHECK_IF(clockid != TMFD_CLOCK_MONOTONIC, return TMFD_FAIL, "clockid shall be TMFD_CLOCK_MONOTONIC");
 
     int fdpair[2];
     int chk = socketpair(PF_UNIX, SOCK_DGRAM, 0, fdpair);
-    check_if(chk < 0, return -1, "socketpair failed");
+    CHECK_IF(chk < 0, return -1, "socketpair failed");
 
-    tTmfdRec* rec  = calloc(sizeof(tTmfdRec), 1);
+    struct tmfd_rec* rec  = calloc(sizeof(struct tmfd_rec), 1);
     rec->tmfd      = fdpair[0];
     rec->fdpair[0] = fdpair[0];
     rec->fdpair[1] = fdpair[1];
@@ -179,21 +178,26 @@ int tmfd_create(int clockid, int flags)
 
 int tmfd_settime(int tmfd, int flags, const struct itmfdspec *new_value, struct itmfdspec *old_value)
 {
-    check_if(tmfd < 0, return TMFD_FAIL, "tmfd = %d invalid", tmfd);
-    check_if(new_value == NULL, return TMFD_FAIL, "new_value is null");
+    CHECK_IF(tmfd < 0, return TMFD_FAIL, "tmfd = %d invalid", tmfd);
+    CHECK_IF(new_value == NULL, return TMFD_FAIL, "new_value is null");
 
-    pthread_mutex_lock(&_tmfd_lock);
+    LOCK();
 
-    tTmfdRec* rec;
-    if (rec = list_find(&_stopped_list, _findTmFd, &tmfd))
+    struct tmfd_rec* rec;
+    rec = list_find(&_stopped_list, _find_tmfd_rec, &tmfd);
+    if (rec)
     {
         list_remove(&_stopped_list, rec);
     }
-    else if (rec == list_find(&_running_list, _findTmFd, &tmfd))
+    else
     {
-        list_remove(&_running_list, rec);
+        rec = list_find(&_running_list, _find_tmfd_rec, &tmfd);
+        if (rec)
+        {
+            list_remove(&_running_list, rec);
+        }
     }
-    check_if(rec == NULL, goto _ERROR, "find no tmfd_rec with tmfd = %d", tmfd);
+    CHECK_IF(rec == NULL, goto _ERROR, "find no tmfd_rec with tmfd = %d", tmfd);
 
     rec->value = *new_value;
 
@@ -209,33 +213,33 @@ int tmfd_settime(int tmfd, int flags, const struct itmfdspec *new_value, struct 
     struct timeval curr, new_time_val;
     gettimeofday(&curr, NULL);
 
-    new_time_val.tv_sec = new_value->it_value.tv_sec;
+    new_time_val.tv_sec  = new_value->it_value.tv_sec;
     new_time_val.tv_usec = new_value->it_value.tv_nsec / 1000;
 
     timeradd(&curr, &new_time_val, &(rec->expire));
-    _addRecToRunningList(rec);
+    _add_rec_to_running_list(rec);
 
 _END:
-    pthread_mutex_unlock(&_tmfd_lock);
+    UNLOCK();
     return TMFD_OK;
 
 _ERROR:
-    pthread_mutex_unlock(&_tmfd_lock);
+    UNLOCK();
     return TMFD_FAIL;
 }
 
 int tmfd_gettime(int tmfd, struct itmfdspec *old_value)
 {
-    check_if(tmfd < 0, return TMFD_FAIL, "tmfd = %d invalid", tmfd);
-    check_if(old_value == NULL, return TMFD_FAIL, "old_value is null");
+    CHECK_IF(tmfd < 0, return TMFD_FAIL, "tmfd = %d invalid", tmfd);
+    CHECK_IF(old_value == NULL, return TMFD_FAIL, "old_value is null");
 
-    pthread_mutex_lock(&_tmfd_lock);
+    LOCK();
 
-    tTmfdRec* rec = list_find(&_running_list, _findTmFd, &tmfd);
+    struct tmfd_rec* rec = list_find(&_running_list, _find_tmfd_rec, &tmfd);
     if (rec == NULL)
     {
-        rec = list_find(&_stopped_list, _findTmFd, &tmfd);
-        check_if(rec == NULL, goto _ERROR, "find no tmfd_rec with tmfd = %d", tmfd);
+        rec = list_find(&_stopped_list, _find_tmfd_rec, &tmfd);
+        CHECK_IF(rec == NULL, goto _ERROR, "find no tmfd_rec with tmfd = %d", tmfd);
 
         memset(old_value, 0, sizeof(struct itmfdspec));
         goto _END;
@@ -251,34 +255,32 @@ int tmfd_gettime(int tmfd, struct itmfdspec *old_value)
     old_value->it_interval      = rec->value.it_interval;
 
 _END:
-    pthread_mutex_unlock(&_tmfd_lock);
+    UNLOCK();
     return TMFD_OK;
 
 _ERROR:
-    pthread_mutex_unlock(&_tmfd_lock);
+    UNLOCK();
     return TMFD_FAIL;
 }
 
 void tmfd_close(int tmfd)
 {
-    pthread_mutex_lock(&_tmfd_lock);
-
-    tTmfdRec* rec = list_find(&_running_list, _findTmFd, &tmfd);
+    LOCK();
+    struct tmfd_rec* rec = list_find(&_running_list, _find_tmfd_rec, &tmfd);
     if (rec)
     {
         list_remove(&_running_list, rec);
-        _cleanTmFdRec(rec);
+        _clean_tmfd_rec(rec);
     }
     else
     {
-        rec = list_find(&_stopped_list, _findTmFd, &tmfd);
+        rec = list_find(&_stopped_list, _find_tmfd_rec, &tmfd);
         if (rec)
         {
             list_remove(&_stopped_list, rec);
-            _cleanTmFdRec(rec);
+            _clean_tmfd_rec(rec);
         }
     }
-
-    pthread_mutex_unlock(&_tmfd_lock);
+    UNLOCK();
     return;
 }

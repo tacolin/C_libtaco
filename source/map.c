@@ -1,150 +1,135 @@
-#include "map.h"
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
-////////////////////////////////////////////////////////////////////////////////
+#include "map.h"
 
 #define MAP_INIT_MAX_SLOTS (16) // must be pow of 2
 
-////////////////////////////////////////////////////////////////////////////////
+#define derror(a, b...) fprintf(stderr, "[ERROR] %s(): "a"\n", __func__, ##b)
+#define CHECK_IF(assertion, error_action, ...) \
+{\
+    if (assertion) \
+    { \
+        derror(__VA_ARGS__); \
+        {error_action;} \
+    }\
+}
 
 #define GET_SLOT(map, id) &(map->slots[id & (map->max_num - 1)])
-
-// #define INC_REF(ref) (ref)++
-// #define DEC_REF(ref) (ref)--
 #define INC_REF(ref) __sync_add_and_fetch(&ref, 1)
 #define DEC_REF(ref) __sync_sub_and_fetch(&ref, 1)
 
-
-////////////////////////////////////////////////////////////////////////////////
-
-int _expandMap(tMap* map)
+static int _expand_map(struct map* map)
 {
-    check_if(map == NULL, return MAP_FAIL, "map is null");
-    check_if(map->is_init != 1, return MAP_FAIL, "map is not init yet");
+    CHECK_IF(map == NULL, return MAP_FAIL, "map is null");
+    CHECK_IF(map->is_init != 1, return MAP_FAIL, "map is not init yet");
 
     int new_max_num = map->max_num * 2;
-    tMapSlot* new_slots = calloc(sizeof(tMapSlot), new_max_num);
-    check_if(new_slots == NULL, return MAP_FAIL, "calloc failed");
+    struct map_slot* new_slots = calloc(sizeof(struct map_slot), new_max_num);
+    CHECK_IF(new_slots == NULL, return MAP_FAIL, "calloc failed");
 
     int i;
-    tMapSlot* old_one;
-    tMapSlot* new_one;
+    struct map_slot* os;
+    struct map_slot* ns;
     for (i=0; i<map->max_num; i++)
     {
-        old_one = &(map->slots[i]);
-        new_one = &(new_slots[old_one->id & (new_max_num -1)]);
-        *new_one = *old_one;
+        os = &(map->slots[i]);
+        ns = &(new_slots[os->id & (new_max_num -1)]);
+        *ns = *os;
     }
-
     free(map->slots);
     map->slots   = new_slots;
     map->max_num = new_max_num;
-
     return MAP_OK;
 }
 
-
-
-////////////////////////////////////////////////////////////////////////////////
-
-int map_init(tMap* map, tMapContentCleanFn cleanfn)
+int map_init(struct map* map, void (*cleanfn)(void*))
 {
-    check_if(map == NULL, return MAP_FAIL, "map is null");
+    CHECK_IF(map == NULL, return MAP_FAIL, "map is null");
 
-    memset(map, 0, sizeof(tMap));
-
-    frwlock_init(&map->rwlock);
-
+    memset(map, 0, sizeof(struct map));
+    rwlock_init(&map->lock);
     map->lastid  = 0;
     map->max_num = MAP_INIT_MAX_SLOTS;
     map->num     = 0;
     map->cleanfn = cleanfn;
-
-    map->slots = calloc(sizeof(tMapSlot), map->max_num);
-    check_if(map->slots == NULL, return MAP_FAIL, "calloc failed");
+    map->slots   = calloc(sizeof(struct map_slot), map->max_num);
+    CHECK_IF(map->slots == NULL, return MAP_FAIL, "calloc failed");
 
     map->is_init = 1;
-
     return MAP_OK;
 }
 
-int map_uninit(tMap* map)
+int map_uninit(struct map* map)
 {
-    check_if(map == NULL, return MAP_FAIL, "map is null");
-    check_if(map->is_init != 1, return MAP_FAIL, "map is not init yet");
+    CHECK_IF(map == NULL, return MAP_FAIL, "map is null");
+    CHECK_IF(map->is_init != 1, return MAP_FAIL, "map is not init yet");
 
     map->is_init = 0;
 
-    frwlock_wlock(&map->rwlock);
-
+    rwlock_wlock(&map->lock);
     if (map->cleanfn)
     {
-        tMapSlot* slot;
+        struct map_slot* slot;
         int i;
         for (i=0; i<map->max_num; i++)
         {
             slot = &(map->slots[i]);
-            if ((slot->id != 0) && slot->content)
+            if ((slot->id != 0) && slot->data)
             {
-                map->cleanfn(slot->content);
+                map->cleanfn(slot->data);
             }
         }
     }
-
     free(map->slots);
     map->slots = NULL;
-
     map->max_num = 0;
     map->num     = 0;
     map->cleanfn = NULL;
     map->lastid = 0;
-
-    frwlock_wunlock(&map->rwlock);
-
+    rwlock_wunlock(&map->lock);
     return MAP_OK;
 }
 
-int map_add(tMap* map, void* content, unsigned int* pid)
+mapid map_new(struct map* map, void* data)
 {
-    check_if(map == NULL, return MAP_FAIL, "map is null");
-    check_if(content == NULL, return MAP_FAIL, "content is null");
-    check_if(map->is_init != 1, return MAP_FAIL, "map is not init yet");
+    CHECK_IF(map == NULL, return MAPID_INVALID, "map is null");
+    CHECK_IF(data == NULL, return MAPID_INVALID, "data is null");
+    CHECK_IF(map->is_init != 1, return MAPID_INVALID, "map is not init yet");
 
-    frwlock_wlock(&map->rwlock);
+    rwlock_wlock(&map->lock);
 
     if (map->num >= (map->max_num * 3 / 4))
     {
-        int ret = _expandMap(map);
-        check_if(ret != MAP_OK, goto _ERROR, "_expandMap failed");
+        int chk = _expand_map(map);
+        CHECK_IF(chk != MAP_OK, goto _ERROR, "_expand_map failed");
     }
 
     int i;
-    tMapSlot* slot;
-    unsigned int tmpid;
+    struct map_slot* slot;
+    mapid tmpid;
     for (i=0; i<map->max_num; i++)
     {
         map->lastid++;
         tmpid = map->lastid;
 
-        if (tmpid == 0)
+        if (tmpid == MAPID_INVALID)
         {
             map->lastid++;
             tmpid = map->lastid;
         }
 
         slot = GET_SLOT(map, tmpid);
-        if (slot->id == 0)
+        if (slot->id == MAPID_INVALID)
         {
             // find a empty slot
-            slot->id      = tmpid;
-            slot->ref     = 1;
-            slot->content = content;
+            slot->id   = tmpid;
+            slot->ref  = 1;
+            slot->data = data;
             map->num++;
-
-            *pid = tmpid;
-
-            frwlock_wunlock(&map->rwlock);
-            return MAP_OK;
+            rwlock_wunlock(&map->lock);
+            return tmpid;
         }
 
         // next one
@@ -153,128 +138,98 @@ int map_add(tMap* map, void* content, unsigned int* pid)
     derror("no slot is empty, but it is impossible");
 
 _ERROR:
-    frwlock_wunlock(&map->rwlock);
-    return MAP_FAIL;
+    rwlock_wunlock(&map->lock);
+    return MAPID_INVALID;
 }
 
-static void* _tryDelete(tMap* map, unsigned int id)
+static void* _try_delete(struct map* map, mapid id)
 {
-    check_if(map == NULL, return NULL, "map is null");
-    check_if(map->is_init != 1, return NULL, "map is not init yet");
-    check_if(id == 0, return NULL, "id = %d invalid", id);
+    CHECK_IF(map == NULL, return NULL, "map is null");
+    CHECK_IF(map->is_init != 1, return NULL, "map is not init yet");
+    CHECK_IF(id == MAPID_INVALID, return NULL, "id = %d invalid", id);
 
-    frwlock_wlock(&map->rwlock);
+    rwlock_wlock(&map->lock);
 
-    tMapSlot* slot = GET_SLOT(map, id);
-    check_if(slot->id != id, goto _ERROR, "id = %d not exist in map", id);
-    check_if(slot->ref > 0, goto _ERROR, "id = %d slot ref = %d", id , slot->ref);
+    struct map_slot* slot = GET_SLOT(map, id);
+    CHECK_IF(slot->id != id, goto _ERROR, "id = %d not exist in map", id);
+    CHECK_IF(slot->ref > 0, goto _ERROR, "id = %d slot ref = %d", id , slot->ref);
 
-    void* content = slot->content;
-
-    slot->content = NULL;
-    slot->id      = 0;
-    slot->ref     = 0;
+    void* data = slot->data;
+    slot->data = NULL;
+    slot->id   = 0;
+    slot->ref  = 0;
     map->num--;
 
-    frwlock_wunlock(&map->rwlock);
-    return content;
+    rwlock_wunlock(&map->lock);
+    return data;
 
 _ERROR:
-    frwlock_wunlock(&map->rwlock);
+    rwlock_wunlock(&map->lock);
     return NULL;
 }
 
-void* map_grab(tMap* map, unsigned int id)
+void* map_grab(struct map* map, mapid id)
 {
-    check_if(map == NULL, return NULL, "map is null");
-    check_if(map->is_init != 1, return NULL, "map is not init yet");
-    check_if(id == 0, return NULL, "id = %d invalid", id);
+    CHECK_IF(map == NULL, return NULL, "map is null");
+    CHECK_IF(map->is_init != 1, return NULL, "map is not init yet");
+    CHECK_IF(id == MAPID_INVALID, return NULL, "id = %d invalid", id);
 
     void* ret = NULL;
 
-    frwlock_rlock(&map->rwlock);
+    rwlock_rlock(&map->lock);
 
-    tMapSlot* slot = GET_SLOT(map, id);
-    check_if(slot->id != id, goto _END, "id = %d not exist in map", id);
+    struct map_slot* slot = GET_SLOT(map, id);
+    if (slot->id != id) goto _END;
+    // CHECK_IF(slot->id != id, goto _END, "id = %d not exist in map", id);
 
     INC_REF(slot->ref);
 
-    ret = slot->content;
+    ret = slot->data;
 
 _END:
-    frwlock_runlock(&map->rwlock);
+    rwlock_runlock(&map->lock);
     return ret;
 }
 
-static void* _releaseRef(tMap* map, unsigned int id)
+static void* _releaseRef(struct map* map, mapid id)
 {
-    check_if(map == NULL, return NULL, "map is null");
-    check_if(map->is_init != 1, return NULL, "map is not init yet");
-    check_if(id == 0, return NULL, "id = %d invalid", id);
+    CHECK_IF(map == NULL, return NULL, "map is null");
+    CHECK_IF(map->is_init != 1, return NULL, "map is not init yet");
+    CHECK_IF(id == MAPID_INVALID, return NULL, "id = %d invalid", id);
 
-    frwlock_rlock(&map->rwlock);
+    rwlock_rlock(&map->lock);
 
-    tMapSlot* slot = GET_SLOT(map, id);
-    check_if(slot->id != id, goto _ERROR, "id = %d not exist in map", id);
+    struct map_slot* slot = GET_SLOT(map, id);
+    if (slot->id != id) goto _ERROR;
+    // CHECK_IF(slot->id != id, goto _ERROR, "id = %d not exist in map", id);
 
-    void* content;
+    void* data;
     if (DEC_REF(slot->ref) <= 0)
     {
-        content = slot->content;
+        data = slot->data;
     }
     else
     {
-        content = NULL;
+        data = NULL;
     }
 
-    frwlock_runlock(&map->rwlock);
-    return content;
+    rwlock_runlock(&map->lock);
+    return data;
 
 _ERROR:
-    frwlock_runlock(&map->rwlock);
+    rwlock_runlock(&map->lock);
     return NULL;
 }
 
-void* map_release(tMap* map, unsigned int id)
+void* map_release(struct map* map, mapid id)
 {
-    check_if(map == NULL, return NULL, "map is null");
-    check_if(map->is_init != 1, return NULL, "map is not init yet");
-    check_if(id == 0, return NULL, "id = %d invalid", id);
+    CHECK_IF(map == NULL, return NULL, "map is null");
+    CHECK_IF(map->is_init != 1, return NULL, "map is not init yet");
+    CHECK_IF(id == MAPID_INVALID, return NULL, "id = %d invalid", id);
 
     if (NULL == _releaseRef(map, id))
     {
         return NULL;
     }
-
-    return _tryDelete(map, id);
-}
-
-// int map_list(tMap* map, int num, unsigned int* results)
-int map_ids(tMap* map, int buf_size, unsigned int* id_buf)
-{
-    check_if(map == NULL, return -1, "map is null");
-    check_if(map->is_init != 1, return -1, "map is not init yet");
-    check_if(buf_size == 0, return -1, "buf_size = %d invalid", buf_size);
-    check_if(id_buf == NULL, return -1, "id_buf is null");
-
-    int i;
-    int ret_num;
-
-    frwlock_rlock(&map->rwlock);
-
-    for (i=0; (ret_num<buf_size) && (i<map->max_num); i++)
-    {
-        tMapSlot* slot = &(map->slots[i]);
-        if (slot->id != 0)
-        {
-            id_buf[ret_num] = slot->id;
-            ret_num++;
-        }
-    }
-
-    // ret_num = map->num;
-
-    frwlock_runlock(&map->rwlock);
-
-    return ret_num;
+    return _try_delete(map, id);
 }

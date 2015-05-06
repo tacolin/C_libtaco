@@ -1,181 +1,167 @@
+#include <stdio.h>
+#include <stdlib.h>
 #include "queue.h"
 
-////////////////////////////////////////////////////////////////////////////////
-
-static void _lock(tQueue* queue)
-{
-    pthread_mutex_lock(&(queue->lock));
+#define derror(a, b...) fprintf(stderr, "[ERROR] %s(): "a"\n", __func__, ##b)
+#define CHECK_IF(assertion, error_action, ...) \
+{\
+    if (assertion) \
+    { \
+        derror(__VA_ARGS__); \
+        {error_action;} \
+    }\
 }
 
-static void _unlock(tQueue* queue)
+#define atom_spinlock(ptr) while (__sync_lock_test_and_set(ptr,1)) {}
+#define atom_spinunlock(ptr) __sync_lock_release(ptr)
+
+#define LOCK(q) atom_spinlock(&q->lock)
+#define UNLOCK(q) atom_spinunlock(&q->lock)
+
+int queue_init(struct queue* q, int depth, void (*cleanfn)(void*), int flag)
 {
-    pthread_mutex_unlock(&(queue->lock));
-}
+    CHECK_IF(q == NULL, return QUEUE_FAIL, "q is null");
+    CHECK_IF(depth == 0, return QUEUE_FAIL, "depth is %d", depth);
 
-////////////////////////////////////////////////////////////////////////////////
-
-int queue_init(tQueue *queue, int max_queue_depth,
-                        tQueueContentCleanFn clean_fn,
-                        tQueueSuspend is_put_suspend,
-                        tQueueSuspend is_get_suspend)
-{
-    check_if(queue == NULL, return QUEUE_FAIL, "queue is null");
-    check_if(max_queue_depth <= 0, return QUEUE_FAIL,
-             "max_queue_depth is %d", max_queue_depth);
-
-    queue->max_obj_num    = max_queue_depth;
-    queue->curr_obj_num   = 0;
-    queue->head           = NULL;
-    queue->tail           = NULL;
-    queue->cleanfn        = clean_fn;
-    queue->is_put_suspend = is_put_suspend;
-    queue->is_get_suspend = is_get_suspend;
-
-    sem_init(&(queue->obj_sem), 0, 0);
-    sem_init(&(queue->empty_sem), 0, max_queue_depth);
-
-    int chk = pthread_mutex_init(&(queue->lock), NULL);
-    check_if(chk != 0, return QUEUE_FAIL, "pthread_mutext_init failed");
-
-    return QUEUE_OK;
-}
-
-void queue_clean(tQueue *queue)
-{
-    check_if(queue == NULL, return, "queue is null");
-
-    _lock(queue);
-
-    tQueueObj *obj      = queue->head;
-    tQueueObj *next_obj = NULL;
-
-    while (obj)
+    q->head = NULL;
+    q->tail = NULL;
+    q->depth = depth;
+    q->num = 0;
+    sem_init(&(q->num_sem), 0, 0);
+    q->cleanfn = cleanfn;
+    q->lock = 0;
+    q->flag = flag;
+    if (depth > 0)
     {
-        next_obj = obj->next_obj;
-
-        if (queue->cleanfn)
-        {
-            queue->cleanfn(obj->content);
-        }
-
-        free(obj);
-
-        obj = next_obj;
-    }
-
-    queue->curr_obj_num = 0;
-    queue->head         = NULL;
-    queue->tail         = NULL;
-
-    sem_init(&(queue->obj_sem), 0, 0);
-    sem_init(&(queue->empty_sem), 0, queue->max_obj_num);
-
-    _unlock(queue);
-
-    return;
-}
-
-int queue_push(tQueue* queue, void* content)
-{
-    check_if(queue == NULL, return QUEUE_FAIL, "queue is null");
-    check_if(content == NULL, return QUEUE_FAIL, "content is null");
-
-    if (queue->is_put_suspend == QUEUE_SUSPEND)
-    {
-        sem_wait(&(queue->empty_sem));
+        sem_init(&(q->empty_sem), 0, depth);
     }
     else
     {
-        if (queue->curr_obj_num >= queue->max_obj_num)
+        sem_init(&(q->empty_sem), 0, 0);
+        q->flag &= ~QUEUE_FLAG_PUSH_BLOCK;
+    }
+    return QUEUE_OK;
+}
+
+void queue_clean(struct queue* q)
+{
+    CHECK_IF(q == NULL, return, "q is null");
+
+    LOCK(q);
+    struct queue_node* node = q->head;
+    struct queue_node* next;
+    while (node)
+    {
+        next = node->next;
+        if (q->cleanfn)
         {
-            // queue is full
-            derror("queue is full (length = %d)", queue_length(queue));
+            q->cleanfn(node->data);
+        }
+        free(node);
+        node = next;
+    }
+    q->num  = 0;
+    q->head = NULL;
+    q->tail = NULL;
+    sem_init(&(q->num_sem), 0, 0);
+    if (q->depth > 0)
+    {
+        sem_init(&(q->empty_sem), 0, q->depth);
+    }
+    else
+    {
+        sem_init(&(q->empty_sem), 0, 0);
+    }
+    UNLOCK(q);
+    return;
+}
+
+int queue_push(struct queue* q, void* data)
+{
+    CHECK_IF(q == NULL, return QUEUE_FAIL, "q is null");
+    CHECK_IF(data == NULL, return QUEUE_FAIL, "data is null");
+
+    if (q->flag & QUEUE_FLAG_PUSH_BLOCK)
+    {
+        sem_wait(&(q->empty_sem));
+    }
+    else
+    {
+        if ((q->depth > 0) && (q->num >= q->depth)) // queue full
+        {
             return QUEUE_FAIL;
         }
     }
 
-    tQueueObj *new_obj;
-    new_obj           = calloc(sizeof(tQueueObj), 1);
-    new_obj->content  = content;
-    new_obj->next_obj = NULL;
+    struct queue_node* node = calloc(sizeof(struct queue_node), 1);
+    node->data = data;
 
-    _lock(queue);
-
-    if (queue->tail)
+    LOCK(q);
+    if (q->tail)
     {
-        queue->tail->next_obj = new_obj;
-        queue->tail = new_obj;
+        q->tail->next = node;
+        q->tail       = node;
     }
     else
     {
-        queue->tail = new_obj;
-        queue->head = new_obj;
+        q->tail = node;
+        q->head = node;
     }
-    queue->curr_obj_num++;
 
-    if (queue->is_get_suspend == QUEUE_SUSPEND)
+    q->num++;
+
+    if (q->flag & QUEUE_FLAG_POP_BLOCK)
     {
-        sem_post(&(queue->obj_sem));
+        sem_post(&(q->num_sem));
     }
-
-    _unlock(queue);
-
+    UNLOCK(q);
     return QUEUE_OK;
 }
 
-void* queue_pop(tQueue* queue)
+void* queue_pop(struct queue* q)
 {
-    check_if(queue == NULL, return NULL, "queue is null");
+    CHECK_IF(q == NULL, return NULL, "q is null");
 
-    if (queue->is_get_suspend == QUEUE_SUSPEND)
+    if (q->flag & QUEUE_FLAG_POP_BLOCK)
     {
-        sem_wait(&(queue->obj_sem));
+        sem_wait(&(q->num_sem));
+    }
+    else if (q->num <= 0)
+    {
+        CHECK_IF(q->head, return NULL, "q is empty but head exists");
+        CHECK_IF(q->tail, return NULL, "q is empty but tail exists");
+        return NULL;
+    }
+
+    CHECK_IF(q->head == NULL, return NULL, "num = %d, but head is NULL", q->num);
+    CHECK_IF(q->tail == NULL, return NULL, "num = %d, but tail is NULL", q->num);
+
+    LOCK(q);
+    struct queue_node *node = q->head;
+    if (node->next)
+    {
+        q->head = node->next;
     }
     else
     {
-        if (queue->curr_obj_num <= 0)
-        {
-            // queue is empty
-            check_if(queue->head, return NULL, "queue is empty but pHead exists");
-            check_if(queue->tail, return NULL, "queue is empty but pTail exists");
-
-            return NULL;
-        }
+        q->head = NULL;
+        q->tail = NULL;
     }
+    q->num--;
 
-    check_if(queue->head == NULL, return NULL, "currentObjNum = %d, but pHead is NULL", queue->curr_obj_num);
-    check_if(queue->tail == NULL, return NULL, "currentObjNum = %d, but pTail is NULL", queue->curr_obj_num);
-
-    _lock(queue);
-
-    tQueueObj *obj = queue->head;
-    if (obj->next_obj)
+    if (q->flag & QUEUE_FLAG_PUSH_BLOCK)
     {
-        queue->head = obj->next_obj;
+        sem_post(&(q->empty_sem));
     }
-    else
-    {
-        queue->head = NULL;
-        queue->tail = NULL;
-    }
-    queue->curr_obj_num--;
+    UNLOCK(q);
 
-    if (queue->is_put_suspend == QUEUE_SUSPEND)
-    {
-        sem_post(&(queue->empty_sem));
-    }
-
-    _unlock(queue);
-
-    void* content = obj->content;
-    free(obj);
-
-    return content;
+    void* data = node->data;
+    free(node);
+    return data;
 }
 
-int queue_length(tQueue* queue)
+int queue_num(struct queue* q)
 {
-    check_if(queue == NULL, return -1, "queue is null");
-
-    return queue->curr_obj_num;
+    CHECK_IF(q == NULL, return -1, "q is null");
+    return q->num;
 }
