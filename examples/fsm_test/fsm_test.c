@@ -139,6 +139,7 @@ int main(int argc, char const *argv[])
     struct taco taco_db = {.data = 100};
     struct fsm fsm;
     fsm_init(&fsm, &_states[0], &taco_db);
+    dprint("curr = %s", fsm_curr(&fsm)->name);
 
     struct fsmev ev;
 
@@ -148,18 +149,22 @@ int main(int argc, char const *argv[])
     // ev.type = (int)'a';
     // ev.data = (void*)((intptr_t)0);
     // fsm_sendev(&fsm, &ev);
+    // dprint("curr = %s", fsm_curr(&fsm)->name);
 
     // ev.type = (int)'b';
     // ev.data = (void*)((intptr_t)50);
     // fsm_sendev(&fsm, &ev);
+    // dprint("curr = %s", fsm_curr(&fsm)->name);
 
     // ev.type = (int)'b';
     // ev.data = (void*)((intptr_t)0);
     // fsm_sendev(&fsm, &ev);
+    // dprint("curr = %s", fsm_curr(&fsm)->name);
 
     // ev.type = (int)'c';
     // ev.data = (void*)((intptr_t)0);
     // fsm_sendev(&fsm, &ev);
+    // dprint("curr = %s", fsm_curr(&fsm)->name);
 
     ///////////////////////////////
     // s1 -> s2 -> s4 -> s5 -> s2
@@ -167,14 +172,17 @@ int main(int argc, char const *argv[])
     ev.type = (int)'a';
     ev.data = (void*)((intptr_t)0);
     fsm_sendev(&fsm, &ev);
+    dprint("curr = %s", fsm_curr(&fsm)->name);
 
     ev.type = (int)'b';
     ev.data = (void*)((intptr_t)150);
     fsm_sendev(&fsm, &ev);
+    dprint("curr = %s", fsm_curr(&fsm)->name);
 
     ev.type = (int)'d';
     ev.data = (void*)((intptr_t)0);
     fsm_sendev(&fsm, &ev);
+    dprint("curr = %s", fsm_curr(&fsm)->name);
 
     fsm_uninit(&fsm);
     dprint("ok");

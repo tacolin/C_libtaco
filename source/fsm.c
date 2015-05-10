@@ -111,8 +111,12 @@ int fsm_sendev(struct fsm* fsm, struct fsmev* ev)
     {
         struct fsmev* new_ev = calloc(sizeof(struct fsmev), 1);
         *new_ev = *ev;
-        int chk = fqueue_push(fsm->evqueue, new_ev);
-        return (chk == FQUEUE_OK) ? FSM_OK : FSM_FAIL ;
+        if (FQUEUE_OK != fqueue_push(fsm->evqueue, new_ev))
+        {
+            free(new_ev);
+            return FSM_FAIL;
+        }
+        return FSM_OK;
     }
 
     fsm->busy = true;
@@ -130,14 +134,8 @@ int fsm_sendev(struct fsm* fsm, struct fsmev* ev)
     return FSM_OK;
 }
 
-struct fsmst* fsm_curr_st(struct fsm* fsm)
+struct fsmst* fsm_curr(struct fsm* fsm)
 {
     CHECK_IF(fsm == NULL, return NULL, "fsm is null");
     return fsm->curr;
-}
-
-struct fsmst* fsm_prev_st(struct fsm* fsm)
-{
-    CHECK_IF(fsm == NULL, return NULL, "fsm is null");
-    return fsm->prev;
 }

@@ -46,5 +46,6 @@ int fsm_init(struct fsm* fsm, struct fsmst* init_st, void* db);
 void fsm_uninit(struct fsm* fsm);
 
 int fsm_sendev(struct fsm* fsm, struct fsmev* ev);
+struct fsmst* fsm_curr(struct fsm* fsm);
 
 #endif //_FSM_H_
