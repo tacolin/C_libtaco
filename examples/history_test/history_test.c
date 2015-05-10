@@ -6,6 +6,17 @@ static void _print_str(int idx, void* data)
     dprint("[%d] : %s", idx, (char*)data);
 }
 
+struct taco
+{
+    int num;
+};
+
+static void _print_taco(int idx, void* data)
+{
+    struct taco* t = (struct taco*)data;
+    dprint("[%d] : num = %d", idx, t->num);
+}
+
 int main(int argc, char const *argv[])
 {
     struct history* h = history_create(20, 10);
@@ -35,8 +46,22 @@ int main(int argc, char const *argv[])
     dprint("===");
     history_do(h, 6, 8, _print_str);
 
+    history_release(h);
+
+    h = history_create(sizeof(struct taco), 10);
+
+    int i;
+    struct taco t;
+    for (i=0; i<19; i++)
+    {
+        t.num = i*10;
+        history_add(h, &t, sizeof(struct taco));
+    }
+
+    history_do_all(h, _print_taco);
 
     history_release(h);
+
     dprint("ok");
     return 0;
 }
