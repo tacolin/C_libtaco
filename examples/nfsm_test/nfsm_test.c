@@ -29,13 +29,13 @@ static void _action(struct nfsm* nfsm, void* db, struct nfsmev* ev)
 {
     struct taco* t = (struct taco*)(db);
     dprint("t->data = %d", t->data);
-    dprint("ev->type = %d, ev->data = %ld", ev->type, (intptr_t)(ev->data));
+    dprint("ev->type = %d, ev->data = %ld", ev->type, (long)(intptr_t)(ev->data));
 }
 
 static int _guard(struct nfsm* nfsm, void* db, struct nfsmev* ev)
 {
     struct taco* t = (struct taco*)(db);
-    dprint("t->data = %d, ev->data = %ld", t->data, (intptr_t)(ev->data));
+    dprint("t->data = %d, ev->data = %ld", t->data, (long)(intptr_t)(ev->data));
     if (t->data > (intptr_t)(ev->data))
     {
         dprint("return true");

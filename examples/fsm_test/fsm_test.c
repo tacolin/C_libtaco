@@ -32,7 +32,7 @@ static void _action(struct fsm* fsm, void* db, struct fsmev* ev)
 {
     struct taco* t = (struct taco*)(db);
     dprint("t->data = %d", t->data);
-    dprint("ev->type = %c, ev->data = %ld", (char)(ev->type), (intptr_t)(ev->data));
+    dprint("ev->type = %c, ev->data = %ld", (char)(ev->type), (long)(intptr_t)(ev->data));
 }
 
 static void _entry_st(struct fsm* fsm, void* db, struct fsmst* st)
@@ -53,7 +53,7 @@ static void _exit_st(struct fsm* fsm, void* db, struct fsmst* st)
 static int _guard(struct fsm* fsm, void* db, struct fsmev* ev)
 {
     struct taco* t = (struct taco*)(db);
-    dprint("t->data = %d, ev->data = %ld", t->data, (intptr_t)(ev->data));
+    dprint("t->data = %d, ev->data = %ld", t->data, (long)(intptr_t)(ev->data));
     if (t->data > (intptr_t)(ev->data))
     {
         dprint("return true");
