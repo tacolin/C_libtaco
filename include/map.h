@@ -39,4 +39,6 @@ mapid map_new(struct map* map, void *data);
 void* map_grab(struct map* map, mapid id);
 void* map_release(struct map* map, mapid id);
 
+int map_list(struct map* map, mapid* idbuf, int bufsize);
+
 #endif //_MAP_H_

@@ -61,6 +61,28 @@ int map_init(struct map* map, void (*cleanfn)(void*))
     return MAP_OK;
 }
 
+int map_list(struct map* map, mapid* idbuf, int bufsize)
+{
+    CHECK_IF(idbuf == NULL, return -1, "map is null");
+    CHECK_IF(bufsize <= 0, return -1, "bufsize = %d invalid", bufsize);
+
+    rwlock_rlock(&map->lock);
+    int i;
+    int ret = 0;
+    for (i=0; i<bufsize && i<map->max_num; i++)
+    {
+        struct map_slot* slot = &(map->slots[i]);
+        if (slot->id != MAPID_INVALID)
+        {
+            idbuf[ret] = slot->id;
+            ret++;
+        }
+    }
+    ret = map->num;
+    rwlock_runlock(&map->lock);
+    return ret;
+}
+
 int map_uninit(struct map* map)
 {
     CHECK_IF(map == NULL, return MAP_FAIL, "map is null");
