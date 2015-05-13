@@ -6,6 +6,7 @@
 
 #define MAP_INIT_MAX_SLOTS (16) // must be pow of 2
 
+#define dprint(a, b...) fprintf(stdout, "%s(): "a"\n", __func__, ##b)
 #define derror(a, b...) fprintf(stderr, "[ERROR] %s(): "a"\n", __func__, ##b)
 #define CHECK_IF(assertion, error_action, ...) \
 {\
