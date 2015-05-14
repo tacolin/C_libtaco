@@ -42,6 +42,11 @@ int udp_init(struct udp* udp, char* local_ip, int local_port)
     CHECK_IF(udp->fd < 0, return UDP_FAIL, "socket failed");
 
     int chk;
+    const int on = 1;
+
+    chk = setsockopt(udp->fd, SOL_SOCKET, SO_BROADCAST, (void*)&on, sizeof(on));
+    CHECK_IF(chk < 0, goto _ERROR, "setsockopt broadcast failed");
+
     if (udp->local_port != UDP_PORT_ANY)
     {
         struct sockaddr_in me = {};
@@ -57,13 +62,13 @@ int udp_init(struct udp* udp, char* local_ip, int local_port)
         }
         me.sin_port = htons(local_port);
 
-        const int on = 1;
         chk = setsockopt(udp->fd, SOL_SOCKET, SO_REUSEADDR, (void*)&on, sizeof(on));
         CHECK_IF(chk < 0, goto _ERROR, "setsockopt reuse failed");
 
         chk = bind(udp->fd, (struct sockaddr*)&me, sizeof(me));
         CHECK_IF(chk < 0, goto _ERROR, "bind failed");
     }
+
     udp->is_init = 1;
     return UDP_OK;
 

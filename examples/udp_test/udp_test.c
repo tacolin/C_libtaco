@@ -4,6 +4,22 @@
 #include <signal.h>
 #include <string.h>
 
+// int main(int argc, char const *argv[])
+// {
+//     struct udp udp;
+//     udp_init(&udp, NULL, 55555);
+//     char buf[256];
+//     struct udp_addr remote;
+//     while (1)
+//     {
+//         udp_recv(&udp, buf, 256, &remote);
+//         dprint("buf = %s", buf);
+//     }
+
+//     udp_uninit(&udp);
+//     return 0;
+// }
+
 static int _running = 1;
 
 int main(int argc, char const *argv[])
