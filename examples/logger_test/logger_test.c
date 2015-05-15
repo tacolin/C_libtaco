@@ -3,12 +3,6 @@
 #include "thread.h"
 #include "queue.h"
 
-struct taco
-{
-    struct queue q;
-    struct logger* lg;
-};
-
 static void _logger(void* arg)
 {
     struct logger* lg = (struct logger*)arg;
