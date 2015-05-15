@@ -19,7 +19,7 @@
     }\
 }
 
-struct logger 
+struct logger
 {
     struct queue mq;
     int flag;
@@ -82,17 +82,21 @@ void logger_release(struct logger* lg)
     free(lg);
 }
 
-void logger_handlemsg(struct logger* lg, char* msg)
+static void _handlemsg(struct logger* lg, char* msg)
 {
-    CHECK_IF(lg == NULL, return, "lg is null");
-    CHECK_IF(msg == NULL, return, "msg is null");
-
     if (lg->flag & LOG_FLAG_STDOUT) fprintf(stdout, "%s", msg);
 
     if (lg->flag & LOG_FLAG_UDP) udp_send(&lg->udp, lg->remote, msg, strlen(msg)+1);
 
     if (lg->flag & LOG_FLAG_FILE) write(lg->fd, msg, strlen(msg)+1);
 }
+
+// void logger_handlemsg(struct logger* lg, char* msg)
+// {
+//     CHECK_IF(lg == NULL, return, "lg is null");
+//     CHECK_IF(msg == NULL, return, "msg is null");
+//     _handlemsg(lg, msg);
+// }
 
 void logger_run(struct logger* lg)
 {
@@ -104,7 +108,7 @@ void logger_run(struct logger* lg)
         char* msg = queue_pop(&lg->mq);
         CHECK_IF(msg == NULL, break, "msg is null");
 
-        logger_handlemsg(lg, msg);
+        _handlemsg(lg, msg);
         free(msg);
     }
     lg->running = false;

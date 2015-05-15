@@ -33,14 +33,14 @@
 //     }\
 // }
 
-enum 
+enum
 {
     LOG_FLAG_STDOUT = 0x1,
     LOG_FLAG_UDP    = 0x2,
     LOG_FLAG_FILE   = 0x4
 };
 
-enum 
+enum
 {
     LOG_LV_INVALID = -1,
     LOG_LV_FATAL = 0,
@@ -66,6 +66,6 @@ void logger_setlevel(struct logger* lg, int lv);
 int logger_getlevel(struct logger* lg);
 
 void logger_enq(struct logger* lg, char* str);
-void logger_handlemsg(struct logger* lg, char* msg);
+// void logger_handlemsg(struct logger* lg, char* msg);
 
 #endif //_LOGGER_H_

@@ -3,7 +3,7 @@
 #include "thread.h"
 #include "queue.h"
 
-struct taco 
+struct taco
 {
     struct queue q;
     struct logger* lg;
@@ -30,7 +30,6 @@ static void _printer(void* arg)
 
 int main(int argc, char const *argv[])
 {
-    // struct logger* lg = logger_create(LOG_FLAG_UDP | LOG_FLAG_FILE | LOG_FLAG_STDOUT, "10.211.55.255", 55555, "/home/taco/taco.txt");
     struct logger* lg = logger_create(LOG_FLAG_UDP | LOG_FLAG_FILE | LOG_FLAG_STDOUT, "127.0.0.1", 55555, "taco.txt");
 
     struct thread t[2] = {
