@@ -145,38 +145,40 @@ static void _put_bits_le(unsigned char* bytes, int ofs, int bit_num, unsigned ch
     bytes[0] |= (value & mask);
 }
 
-unsigned int bits_get_le(void* bytes, int ofs, int bit_num)
+unsigned int bits_get_le(void* bytes, int* ofs, int bit_num)
 {
-    unsigned char* start = ((unsigned char*)bytes) + bit_address(ofs);
-    unsigned char* stop  = ((unsigned char*)bytes) + bit_address(ofs+bit_num);
+    unsigned char* start = ((unsigned char*)bytes) + bit_address(*ofs);
+    unsigned char* stop  = ((unsigned char*)bytes) + bit_address(*ofs+bit_num);
     unsigned char  bits = 0;
 
     unsigned int tmp    = 0;
     unsigned int ret    = 0;
 
     CHECK_IF(bytes == NULL, return 0, "bytes is null");
+    CHECK_IF(ofs == NULL, return 0, "ofs is null");
     CHECK_IF(bit_num <= 0, return 0, "bit_num = %d invalid", bit_num);
     CHECK_IF(bit_num > 32, return 0, "get more than 32 bits");
 
-    if ((bit_offset(ofs) + bit_num) <= 8)
+    if ((bit_offset(*ofs) + bit_num) <= 8)
     {
-        ret = _get_bits_le((unsigned char*)bytes, ofs, bit_num);
+        ret = _get_bits_le((unsigned char*)bytes, *ofs, bit_num);
     }
-    else if ((bit_offset(ofs) + bit_num) < 40)
+    else if ((bit_offset(*ofs) + bit_num) < 40)
     {
-        tmp  = _get_bits_le(start, bit_offset(ofs), (8 - bit_offset(ofs)));
+        tmp  = _get_bits_le(start, bit_offset(*ofs), (8 - bit_offset(*ofs)));
         ret |= tmp;
 
         while (start++ < (stop - 1))
         {
-            tmp      = *start << (8 - bit_offset(ofs) + bits);
+            tmp      = *start << (8 - bit_offset(*ofs) + bits);
             ret     |= tmp;
             bits  += 8;
         }
 
-        tmp  = _get_bits_le(stop, 0, bit_offset(ofs+bit_num)) << (8 - bit_offset(ofs) + bits);
+        tmp  = _get_bits_le(stop, 0, bit_offset(*ofs+bit_num)) << (8 - bit_offset(*ofs) + bits);
         ret |= tmp;
     }
+    *ofs += bit_num;
     return ret;
 }
 

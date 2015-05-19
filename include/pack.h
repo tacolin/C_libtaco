@@ -60,7 +60,7 @@
 unsigned int bits_get(void* bytes, int* ofs, int bit_num);
 void bits_put(void* bytes, int* ofs, int bit_num, unsigned int value);
 
-unsigned int bits_get_le(void* bytes, int ofs, int bit_num);
+unsigned int bits_get_le(void* bytes, int* ofs, int bit_num);
 void bits_put_le(void* bytes, int *ofs, int bit_num, unsigned int value);
 
 int bitmap_to_str(unsigned int bitmap, int bit_num, char* str_buf, int buf_size);
