@@ -1,6 +1,12 @@
 #include "basic.h"
 #include "cli_cmd.h"
 
+static int _help_fn(struct cli_cmd* cmd, struct cli* cli, int argc, char* argv[])
+{
+    dprint("your input is un-correct");
+    return CMD_OK;
+}
+
 static int _show_me_the_money(struct cli_cmd* cmd, struct cli* cli, int argc, char* argv[])
 {
     dprint("here");
@@ -10,6 +16,7 @@ static int _show_me_the_money(struct cli_cmd* cmd, struct cli* cli, int argc, ch
 int main(int argc, char const *argv[])
 {
     cli_sys_init();
+    cli_install_regular(_help_fn);
 
     int exec_id = 0;
 
@@ -24,7 +31,7 @@ int main(int argc, char const *argv[])
     cli_show_cmds(exec_id);
 
     cli_compare_string(exec_id, "show me the money");
-    cli_compare_string(exec_id, "show me the");
+    cli_compare_string(exec_id, "show me the fucker");
 
     cli_sys_uninit();
     dprint("ok");

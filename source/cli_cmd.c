@@ -313,7 +313,11 @@ int cli_compare_string(int node_id, char* string)
     while (text)
     {
         struct cli_cmd* cmd = _get_cmd(cmd_list, text);
-        if (cmd == NULL) break;
+        if (cmd == NULL)
+        {
+            if (_regular_fn) _regular_fn(cmd, NULL, 0, NULL);
+            break;
+        }
 
         if (cmd->func)
         {
