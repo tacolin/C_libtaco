@@ -17,6 +17,19 @@
     }\
 }
 
+static struct list _nodes   = {};
+static cli_func _regular_fn = NULL;
+
+static bool _is_all_upper(char* text)
+{
+    int i;
+    for (i=0; i<strlen(text)-1; i++)
+    {
+        if (islower((int)text[i])) return false;
+    }
+    return true;
+}
+
 static char* _pre_process_string(char* string)
 {
     char* tmp = strdup(string);
@@ -123,187 +136,193 @@ static char* _pre_process_string(char* string)
     return tmp;
 }
 
-static struct list _node_list = {};
+// static int _calc_desc_num(char** descs)
+// {
+//     CHECK_IF(descs == NULL, return -1, "descs is null");
+//     int i;
+//     for (i=0; descs[i]; i++);
+//     return i;
+// }
 
-static int _calc_desc_num(char** descs)
+static int _decide_cmd_type(char* text)
 {
-    CHECK_IF(descs == NULL, return -1, "descs is null");
-    int i;
-    for (i=0; descs[i]; i++);
-    return i;
-}
-
-static int _split_cmd_str_to_elem(struct cli_cmd* cmd, char** descs)
-{
-    CHECK_IF(cmd == NULL, return CMD_FAIL, "cmd is null");
-    CHECK_IF(cmd->cmd_str == NULL, return CMD_FAIL, "cmd->cmd_str is null");
-    CHECK_IF(descs == NULL, return CMD_FAIL, "descs is null");
-
-    int desc_num     = _calc_desc_num(descs);
-    int desc_idx     = 0;
-    char* dup        = strdup(cmd->cmd_str);
-    char* scratch    = NULL;
-    char* delimeters = " \r\n\t";
-    char* text       = strtok_r(dup, delimeters, &scratch);
-    while (text)
+    if (text[0] == '<') // <1-100>
     {
-        struct cli_elem* e = calloc(sizeof(*e), 1);
-        e->elem_str = strdup(text);
-        e->desc     = (desc_idx < desc_num) ? strdup(descs[desc_idx]) : strdup(" ") ;
-        desc_idx++;
-
-        if (text[0] == '(')
-        {
-            e->is_alternative = true;
-        }
-        else if (text[0] == '[')
-        {
-            e->is_option = true;
-        }
-        list_append(&cmd->elem_list, e);
-
-        text = strtok_r(NULL, delimeters, &scratch);
+        return CMD_INT;
     }
-    free(dup);
-    return CMD_OK;
+    else if (text[0] == 'A') // A.B.C.D/M
+    {
+        return CMD_IPV4;
+    }
+    else if (text[0] == 'X') // X:X:X:X:X:X
+    {
+        return CMD_MACADDR;
+    }
+    else if (_is_all_upper(text))
+    {
+        return CMD_STRING;
+    }
+    return CMD_TOKEN;
 }
 
-static int _find_node(void* data, void* arg)
+static int _compare_cmd_str(void* data, void* arg)
+{
+    struct cli_cmd* c = (struct cli_cmd*)data;
+    char* str = (char*)arg;
+    return (0 == strcmp(c->str, str)) ? 1 : 0 ;
+}
+
+static struct cli_cmd* _get_cmd(struct list* list, char* str)
+{
+    return list_find(list, _compare_cmd_str, str);
+}
+
+static int _compare_node_id(void* data, void* arg)
 {
     struct cli_node* n = (struct cli_node*)data;
-    return STR_EQUAL(n->name, (char*)arg) ? 1 : 0;
+    int* id = (int*)arg;
+    return (n->id == *id) ? 1 : 0 ;
 }
 
-void cli_show_cmds(char* node_name)
+static void _clean_node(void* data)
 {
-    CHECK_IF(node_name == NULL, return, "node_name is null");
-
-    struct cli_node* node = list_find(&_node_list, _find_node, node_name);
-    CHECK_IF(node == NULL, return, "node (name = %s) is not in the list", node_name);
-
-    int idx = 0;
-    void* obj;
-    struct cli_cmd* cmd;
-    LIST_FOREACH(&node->cmd_list, obj, cmd)
+    if (data)
     {
-        dprint("cmd[%d] = %s", idx, cmd->cmd_str);
-
-        void* elem_obj;
-        struct cli_elem* elem;
-        int elem_idx = 0;
-        LIST_FOREACH(&cmd->elem_list, elem_obj, elem)
-        {
-            dprint("\telem[%d] = %s, desc = %s", elem_idx, elem->elem_str, elem->desc);
-            elem_idx++;
-        }
-        idx++;
-    }
-    return;
-}
-
-static void _clean_elem(void* input)
-{
-    if (input)
-    {
-        struct cli_elem* e = (struct cli_elem*)input;
-        free(e->elem_str);
-        free(e->desc);
-        free(e);
+        struct cli_node* n = (struct cli_node*)data;
+        if (n->prompt) free(n->prompt);
+        list_clean(&n->cmds);
+        free(data);
     }
 }
 
-static void _clean_cmd(void* input)
+static struct cli_node* _get_node(int id)
 {
-    if (input)
+    return list_find(&_nodes, _compare_node_id, &id);
+}
+
+static void _clean_cmd(void* data)
+{
+    if (data)
     {
-        struct cli_cmd* c = (struct cli_cmd*)input;
-        free(c->cmd_str);
-        list_clean(&c->elem_list);
-        free(c);
+        struct cli_cmd* c = (struct cli_cmd*)data;
+        if (c->str) free(c->str);
+        if (c->desc) free(c->desc);
+        list_clean(&c->sub_cmds);
+        free(data);
     }
 }
 
-int cli_install_cmd(char* node_name, struct cli_cmd_cfg* cfg)
+struct cli_cmd* cli_install_cmd(struct cli_cmd* parent, char* string, cli_func func, int node_id, char* desc)
 {
-    CHECK_IF(node_name == NULL, return CMD_FAIL, "node_name is null");
-    CHECK_IF(cfg == NULL, return CMD_FAIL, "cfg is null");
-    return cli_install_cmd_ex(node_name, cfg->cmd_str, cfg->func, cfg->descs);
+    CHECK_IF(string == NULL, return NULL, "string is null");
+
+    struct cli_node* node = _get_node(node_id);
+    CHECK_IF(node == NULL, return NULL, "node with id = %d is not in the list", node_id);
+
+    struct list* cmd_list = (parent) ? (&parent->sub_cmds) : (&node->cmds) ;
+    struct cli_cmd* c = _get_cmd(cmd_list, string);
+    CHECK_IF(c != NULL, return c, "cmd (%s) has already existed", string);
+
+    c       = calloc(sizeof(*c), 1);
+    c->str  = _pre_process_string(string);
+    c->type = _decide_cmd_type(c->str);
+    c->desc = (desc) ? strdup(desc) : strdup(" ") ;
+    c->func = func;
+    list_init(&c->sub_cmds, _clean_cmd);
+
+    list_append(cmd_list, c);
+    return c;
 }
 
-int cli_install_cmd_ex(char* node_name, char* string, cli_func func, char** descs)
+struct cli_node* cli_install_node(int id, char* prompt)
 {
-    CHECK_IF(node_name == NULL, return CMD_FAIL, "node_name is null");
-    CHECK_IF(string == NULL, return CMD_FAIL, "string is null");
-    CHECK_IF(func == NULL, return CMD_FAIL, "func is null");
-    CHECK_IF(descs == NULL, return CMD_FAIL, "descs is null");
+    CHECK_IF(prompt == NULL, return NULL, "prompt is null");
 
-    struct cli_node* node = list_find(&_node_list, _find_node, node_name);
-    CHECK_IF(node == NULL, return CMD_FAIL, "node (name = %s) is not in the list", node_name);
+    struct cli_node* node = _get_node(id);
+    CHECK_IF(node != NULL, return node, "id = %d is already in the list", id);
 
-    struct cli_cmd* c = calloc(sizeof(*c), 1);
-    c->cmd_str        = _pre_process_string(string);
-    c->func           = func;
-    list_init(&c->elem_list, _clean_elem);
+    node = calloc(sizeof(*node), 1);
+    node->id = id;
+    node->prompt = strdup(prompt);
+    list_init(&node->cmds, _clean_cmd);
 
-    int chk = _split_cmd_str_to_elem(c, descs);
-    CHECK_IF(chk != CMD_OK, goto _ERROR, "_split_cmd_str_to_elem failed");
-
-    list_append(&node->cmd_list, c);
-    return CMD_OK;
-
-_ERROR:
-    _clean_cmd(c);
-    return CMD_FAIL;
-}
-
-int cli_install_node(char* name, char* prompt)
-{
-    CHECK_IF(name == NULL, return CMD_FAIL, "name is null");
-    CHECK_IF(prompt == NULL, return CMD_FAIL, "prompt is null");
-
-    struct cli_node* n = list_find(&_node_list, _find_node, name);
-    CHECK_IF(n != NULL, return CMD_FAIL, "node (name = %s) is already in the list", name);
-
-    n = calloc(sizeof(*n), 1);
-    n->name = strdup(name);
-    n->prompt = strdup(prompt);
-    list_init(&n->cmd_list, _clean_cmd);
-
-    list_append(&_node_list, n);
-    return CMD_OK;
-}
-
-static void _clean_node(void* input)
-{
-    if (input)
-    {
-        struct cli_node* n = (struct cli_node*)input;
-        free(n->name);
-        free(n->prompt);
-        list_clean(&n->cmd_list);
-        free(n);
-    }
+    list_append(&_nodes, node);
+    return node;
 }
 
 int cli_sys_init(void)
 {
-    list_init(&_node_list, _clean_node);
+    list_init(&_nodes, _clean_node);
     return CMD_OK;
 }
 
 void cli_sys_uninit(void)
 {
-    list_clean(&_node_list);
+    list_clean(&_nodes);
 }
 
-int cli_set_default_node(char* node_name)
+void cli_install_regular(cli_func func)
 {
-    CHECK_IF(node_name == NULL, return CMD_FAIL, "node_name is null");
+    _regular_fn = func;
+}
 
-    struct cli_node* node = list_find(&_node_list, _find_node, node_name);
-    CHECK_IF(node == NULL, return CMD_FAIL, "node (name = %s) is not in the list", node_name);
+void _show_cmd(struct cli_cmd* cmd, int layer)
+{
+    static char* spaces = "                                                     ";
 
-    list_remove(&_node_list, node);
-    list_insert(&_node_list, node);
+    CHECK_IF(cmd == NULL, return, "cmd is null");
+
+    dprint("%.*s %s (%s)", layer*2, spaces, cmd->str, cmd->desc);
+
+    void* obj;
+    struct cli_cmd* sub;
+    LIST_FOREACH(&cmd->sub_cmds, obj, sub)
+    {
+        _show_cmd(sub, layer+1);
+    }
+    return;
+}
+
+void cli_show_cmds(int node_id)
+{
+    struct cli_node* node = _get_node(node_id);
+    CHECK_IF(node == NULL, return, "node with id = %d is not in the list", node_id);
+
+    void* obj;
+    struct cli_cmd* cmd;
+    LIST_FOREACH(&node->cmds, obj, cmd)
+    {
+        _show_cmd(cmd, 1);
+    }
+    return;
+}
+
+int cli_compare_string(int node_id, char* string)
+{
+    CHECK_IF(string == NULL, return CMD_FAIL, "string is null");
+
+    struct cli_node* node = _get_node(node_id);
+    CHECK_IF(node == NULL, return CMD_FAIL, "node with id = %d is not in the list", node_id);
+
+    struct list* cmd_list = &node->cmds;
+
+    char* dup = strdup(string);
+    char* scratch = NULL;
+    char* delimiters = " \r\t\n";
+    char* text = strtok_r(dup, delimiters, &scratch);
+    while (text)
+    {
+        struct cli_cmd* cmd = _get_cmd(cmd_list, text);
+        if (cmd == NULL) break;
+
+        if (cmd->func)
+        {
+            cmd->func(cmd, NULL, 0, NULL);
+            break;
+        }
+        cmd_list = &(cmd->sub_cmds);
+        text = strtok_r(NULL, delimiters, &scratch);
+    }
+    free(dup);
     return CMD_OK;
 }

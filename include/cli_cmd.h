@@ -7,59 +7,56 @@
 #define CMD_OK (0)
 #define CMD_FAIL (-1)
 
+// #define DEFUN(funcname, cmdname, cmdstr, ...) \
+//     static int funcname(struct cli_cmd* cmd, struct cli* cli, int argc, char* argv[]);\
+//     struct cli_cmd_cfg cmdname = \
+//     { \
+//         .cmd_str = (char*)cmdstr, \
+//         .func = funcname, \
+//         .descs = (char*[]){__VA_ARGS__, NULL}, \
+//     }; \
+//     static int funcname(struct cli_cmd* cmd, struct cli* cli, int argc, char* argv[])
+
+struct cli;
 struct cli_cmd;
 
-typedef int (*cli_func)(struct cli_cmd* cmd, void* cli, int argc, char* argv[]);
+typedef int (*cli_func)(struct cli_cmd* cmd, struct cli* cli, int argc, char* argv[]);
 
-struct cli_elem
+enum
 {
-    char* elem_str;
-    char* desc;
+    CMD_TOKEN,
+    CMD_INT,
+    CMD_IPV4,
+    CMD_MACADDR,
+    CMD_STRING,
 
-    bool  is_option;
-    bool  is_alternative;
+    CMD_TYPES
 };
 
 struct cli_cmd
 {
-    char* cmd_str;
+    int type;
+    char* str;
+    char* desc;
     cli_func func;
-    struct list elem_list;
-};
-
-struct cli_cmd_cfg
-{
-    char* cmd_str;
-    cli_func func;
-    char** descs;
+    struct list sub_cmds;
 };
 
 struct cli_node
 {
-    char* name;
+    int id;
     char* prompt;
-
-    struct list cmd_list;
+    struct list cmds;
 };
 
-void cli_show_cmds(char* node_name);
-int cli_install_cmd_ex(char* node_name, char* string, cli_func func, char** descs);
-int cli_install_cmd(char* node_name, struct cli_cmd_cfg* cfg);
-int cli_install_node(char* name, char* prompt);
+void cli_show_cmds(int node_id);
 
-int cli_set_default_node(char* node_name);
+void cli_install_regular(cli_func func);
+
+struct cli_node* cli_install_node(int id, char* prompt);
+struct cli_cmd*  cli_install_cmd(struct cli_cmd* parent, char* string, cli_func func, int node_id, char* desc);
 
 int cli_sys_init(void);
 void cli_sys_uninit(void);
-
-#define DEFUN(funcname, cmdname, cmdstr, ...) \
-    static int funcname(struct cli_cmd* cmd, void* cli, int argc, char* argv[]);\
-    struct cli_cmd_cfg cmdname = \
-    { \
-        .cmd_str = (char*)cmdstr, \
-        .func = funcname, \
-        .descs = (char*[]){__VA_ARGS__, NULL}, \
-    }; \
-    static int funcname(struct cli_cmd* cmd, void* cli, int argc, char* argv[])
 
 #endif //_CLI_CMD_H_

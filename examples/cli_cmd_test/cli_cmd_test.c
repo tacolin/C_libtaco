@@ -1,26 +1,9 @@
 #include "basic.h"
 #include "cli_cmd.h"
 
-DEFUN(show_me_the_money,
-      show_me_the_money_cmd,
-      "show me the money",
-      "this is show",
-      "this is me",
-      "this is the",
-      "this is money")
+static int _show_me_the_money(struct cli_cmd* cmd, struct cli* cli, int argc, char* argv[])
 {
-    dprint("lalala - show me the money, i am pool");
-    return CMD_OK;
-}
-
-DEFUN(test_alternative,
-      test_alternative_cmd,
-      "(add | del | modify) station <1-100>",
-      "this is add, del, or modify",
-      "this is station",
-      "this is station id")
-{
-    dprint("fff - this is alternative cmd test");
+    dprint("here");
     return CMD_OK;
 }
 
@@ -28,16 +11,20 @@ int main(int argc, char const *argv[])
 {
     cli_sys_init();
 
-    cli_install_node("exec", ">");
-    cli_install_node("enable", "#");
-    cli_install_node("config", "(config)#");
-    cli_install_node("interface", "(config-if)#");
-    cli_set_default_node("exec");
+    int exec_id = 0;
 
-    cli_install_cmd("exec", &show_me_the_money_cmd);
-    cli_install_cmd("exec", &test_alternative_cmd);
+    cli_install_node(exec_id, ">");
 
-    cli_show_cmds("exec");
+    struct cli_cmd* c;
+    c = cli_install_cmd(NULL, "show", NULL, exec_id, "this is show");
+    c = cli_install_cmd(c, "me", NULL, exec_id, "this is me");
+    c = cli_install_cmd(c, "the", NULL, exec_id, "this is the");
+    cli_install_cmd(c, "money", _show_me_the_money, exec_id, "this is money");
+
+    cli_show_cmds(exec_id);
+
+    cli_compare_string(exec_id, "show me the money");
+    cli_compare_string(exec_id, "show me the");
 
     cli_sys_uninit();
     dprint("ok");
