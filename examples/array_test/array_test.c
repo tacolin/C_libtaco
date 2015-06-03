@@ -5,23 +5,21 @@
 
 int main(int argc, char const *argv[])
 {
-    struct array array = {};
+    struct array* array = array_create(NULL);
 
-    array_init(&array, NULL);
-
-    array_add(&array, (void*)(intptr_t)1);
-    array_add(&array, (void*)(intptr_t)2);
-    array_add(&array, (void*)(intptr_t)3);
-    array_add(&array, (void*)(intptr_t)4);
-    array_add(&array, (void*)(intptr_t)5);
+    array_add(array, (void*)(intptr_t)1);
+    array_add(array, (void*)(intptr_t)2);
+    array_add(array, (void*)(intptr_t)3);
+    array_add(array, (void*)(intptr_t)4);
+    array_add(array, (void*)(intptr_t)5);
 
     int i;
-    for (i=0; i<array.num; i++)
+    for (i=0; i<array->num; i++)
     {
-        dprint("array->datas[%d] = %d", i, (intptr_t)array.datas[i]);
+        dprint("array->datas[%d] = %d", i, (intptr_t)array->datas[i]);
     }
 
-    array_uninit(&array);
+    array_release(array);
 
     dprint("ok");
     return 0;

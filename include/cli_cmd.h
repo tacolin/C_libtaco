@@ -2,10 +2,13 @@
 #define _CLI_CMD_H_
 
 #include "list.h"
+#include "array.h"
 #include "stdbool.h"
 
 #define CMD_OK (0)
 #define CMD_FAIL (-1)
+
+#define CMD_MAX_INPUT_SIZE (100)
 
 // #define DEFUN(funcname, cmdname, cmdstr, ...) \
 //     static int funcname(struct cli_cmd* cmd, struct cli* cli, int argc, char* argv[]);\
@@ -40,6 +43,9 @@ struct cli_cmd
     char* desc;
     cli_func func;
     struct list sub_cmds;
+
+    long ubound;
+    long lbound;
 };
 
 struct cli_node
@@ -58,5 +64,12 @@ struct cli_cmd*  cli_install_cmd(struct cli_cmd* parent, char* string, cli_func 
 
 int cli_sys_init(void);
 void cli_sys_uninit(void);
+
+struct array* cli_string_to_array(char* string, char* delimiters);
+void cli_release_array(struct array* array);
+
+int cli_excute_cmd(int node_id, char* string);
+struct array* cli_get_completions(int node_id, char* string, char** output);
+
 
 #endif //_CLI_CMD_H_

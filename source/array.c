@@ -13,31 +13,30 @@
     }\
 }
 
-int array_init(struct array* array, void (*cleanfn)(void* data))
+struct array* array_create(void (*cleanfn)(void* data))
 {
-    CHECK_IF(array == NULL, return ARRAY_FAIL, "array is null");
-
+    struct array* array = calloc(sizeof(*array), 1);
     array->num     = 0;
     array->datas   = NULL;
     array->cleanfn = cleanfn;
-    return ARRAY_OK;
+    return array;
 }
 
-void array_uninit(struct array* array)
+void array_release(struct array* array)
 {
     CHECK_IF(array == NULL, return, "array is null");
-
-    if (array->num == 0) return;
-
-    CHECK_IF(array->datas == NULL, return, "array->num = %d but datas is null", array->num);
 
     if (array->cleanfn)
     {
         int i;
         for (i=0; i<array->num; i++) array->cleanfn(array->datas[i]);
     }
-    free(array->datas);
-    array->datas = NULL;
+
+    if (array->datas)
+    {
+        free(array->datas);
+    }
+    free(array);
     return;
 }
 

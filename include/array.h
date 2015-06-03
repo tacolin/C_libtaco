@@ -12,8 +12,8 @@ struct array
     void (*cleanfn)(void* data);
 };
 
-// int array_init(struct array* array, void (*cleanfn)(void* data));
-void array_uninit(struct array* array);
+struct array* array_create(void (*cleanfn)(void* data));
+void array_release(struct array* array);
 
 int array_add(struct array* array, void* data);
 int array_find(struct array* array, int (*findfn)(void* data, void* arg), void* arg);
