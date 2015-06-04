@@ -2,21 +2,31 @@
 #include "basic.h"
 #include "cli_cmd.h"
 
-static int _help_fn(struct cli_cmd* cmd, struct cli* cli, int argc, char* argv[])
+static int _help_fn(struct cli* cli, int argc, char* argv[])
 {
-    dprint("your input is un-correct");
+    dprint("your input is un-correct : %s", argv[0]);
     return CMD_OK;
 }
 
-static int _show_me_the_money(struct cli_cmd* cmd, struct cli* cli, int argc, char* argv[])
+DEFUN(_show_me_the_money,
+      _show_me_the_money_cmd,
+      "show me the money",
+      "desc 1",
+      "desc 2",
+      "desc 3",
+      "desc 4")
 {
     dprint("here");
     return CMD_OK;
 }
 
-static int _set_id(struct cli_cmd* cmd, struct cli* cli, int argc, char* argv[])
+DEFUN(_set_id,
+      _set_id_cmd,
+      "set id <1-100>",
+      "desc 1",
+      "desc 2")
 {
-    dprint("here");
+    dprint("id = %d", atoi(argv[0]));
     return CMD_OK;
 }
 
@@ -29,26 +39,34 @@ int main(int argc, char const *argv[])
 
     cli_install_node(exec_id, ">");
 
-    struct cli_cmd* c;
-    c = cli_install_cmd(NULL, "show", NULL, exec_id, "this is show");
-    c = cli_install_cmd(c, "me", NULL, exec_id, "this is me");
-    c = cli_install_cmd(c, "the", NULL, exec_id, "this is the");
-    cli_install_cmd(c, "money", _show_me_the_money, exec_id, "this is money");
-
-    c = cli_install_cmd(NULL, "set", NULL, exec_id, "this is set");
-    c = cli_install_cmd(c, "id", NULL, exec_id, "this is id");
-    cli_install_cmd(c, "<1-100>", _set_id, exec_id, "this is value");
+    cli_install_cmd(exec_id, &_show_me_the_money_cmd);
+    cli_install_cmd(exec_id, &_set_id_cmd);
 
     cli_show_cmds(exec_id);
 
+    int fd;
+    cli_server_init("5566", "i am sad", 55666, &fd);
+
+    dprint("show me the money:");
     cli_excute_cmd(exec_id, "show me the money");
+
+    dprint("sh m t mon");
     cli_excute_cmd(exec_id, "sh m t mon");
+
+    dprint("show me the fucker");
     cli_excute_cmd(exec_id, "show me the fucker");
+
+    dprint("set id 50");
     cli_excute_cmd(exec_id, "set id 50");
+
+    dprint("set id 101");
     cli_excute_cmd(exec_id, "set id 101");
 
+    dprint("se i 1");
+    cli_excute_cmd(exec_id, "se i 1");
+
     char* output;
-    struct array* completions = cli_get_completions(exec_id, "s ", &output);
+    struct array* completions = cli_get_completions(exec_id, "se i 1 ", &output);
     dprint("output = %s", output);
     int i;
     for(i=0; i<completions->num; i++)
@@ -56,7 +74,9 @@ int main(int argc, char const *argv[])
         dprint("completions[%d] = %s", i, (char*)completions->datas[i]);
     }
     free(output);
-    cli_release_array(completions);
+    array_release(completions);
+
+    cli_server_uninit();
 
     cli_sys_uninit();
     dprint("ok");

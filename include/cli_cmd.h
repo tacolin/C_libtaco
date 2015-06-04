@@ -1,75 +1,72 @@
 #ifndef _CLI_CMD_H_
 #define _CLI_CMD_H_
 
-#include "list.h"
+#include <stdbool.h>
+
 #include "array.h"
-#include "stdbool.h"
+#include "tcp.h"
 
 #define CMD_OK (0)
 #define CMD_FAIL (-1)
 
 #define CMD_MAX_INPUT_SIZE (100)
+#define CMD_MAX_CONN_NUM (100)
 
-// #define DEFUN(funcname, cmdname, cmdstr, ...) \
-//     static int funcname(struct cli_cmd* cmd, struct cli* cli, int argc, char* argv[]);\
-//     struct cli_cmd_cfg cmdname = \
-//     { \
-//         .cmd_str = (char*)cmdstr, \
-//         .func = funcname, \
-//         .descs = (char*[]){__VA_ARGS__, NULL}, \
-//     }; \
-//     static int funcname(struct cli_cmd* cmd, struct cli* cli, int argc, char* argv[])
+#define DEFUN(funcname, cmdcfgname, cmdstr, ...) \
+    static int funcname(struct cli* cli, int argc, char* argv[]);\
+    struct cli_cmd_cfg cmdcfgname = \
+    { \
+        .cmd_str = (char*)cmdstr, \
+        .func = funcname, \
+        .descs = (char*[]){__VA_ARGS__, NULL}, \
+    };\
+    static int funcname(struct cli* cli, int argc, char* argv[])
 
 struct cli;
-struct cli_cmd;
+typedef int (*cli_func)(struct cli* cli, int argc, char* argv[]);
 
-typedef int (*cli_func)(struct cli_cmd* cmd, struct cli* cli, int argc, char* argv[]);
+struct cli_cmd_cfg
+{
+    char* cmd_str;
+    cli_func func;
+    char** descs;
+};
 
 enum
 {
-    CMD_TOKEN,
-    CMD_INT,
-    CMD_IPV4,
-    CMD_MACADDR,
-    CMD_STRING,
+    CLI_ST_NONE,
+    CLI_ST_WAIT_FOR_USERNAME,
+    CLI_ST_WAIT_FOR_PASSWORD,
+    CLI_ST_CONNECTED,
 
-    CMD_TYPES
+    CLI_STATES
 };
 
-struct cli_cmd
+struct cli
 {
-    int type;
-    char* str;
-    char* desc;
-    cli_func func;
-    struct list sub_cmds;
+    int fd; // the same value in the struct tcp's fd
+    struct tcp tcp;
 
-    long ubound;
-    long lbound;
+    int state;
 };
 
-struct cli_node
-{
-    int id;
-    char* prompt;
-    struct list cmds;
-};
-
+int cli_excute_cmd(int node_id, char* string);
+struct array* cli_get_completions(int node_id, char* string, char** output);
 void cli_show_cmds(int node_id);
 
 void cli_install_regular(cli_func func);
-
-struct cli_node* cli_install_node(int id, char* prompt);
-struct cli_cmd*  cli_install_cmd(struct cli_cmd* parent, char* string, cli_func func, int node_id, char* desc);
+int cli_install_node(int id, char* prompt);
+int cli_install_cmd(int node_id, struct cli_cmd_cfg* cfg);
 
 int cli_sys_init(void);
 void cli_sys_uninit(void);
 
-struct array* cli_string_to_array(char* string, char* delimiters);
-void cli_release_array(struct array* array);
+int cli_server_init(char* username, char* password, int port, int* server_fd);
+void cli_server_uninit(void);
 
-int cli_excute_cmd(int node_id, char* string);
-struct array* cli_get_completions(int node_id, char* string, char** output);
+int cli_server_accept(struct cli* cli);
+void cli_uninit(struct cli* cli);
 
+int cli_process(struct cli* cli);
 
 #endif //_CLI_CMD_H_

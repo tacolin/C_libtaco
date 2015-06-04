@@ -16,6 +16,6 @@ struct array* array_create(void (*cleanfn)(void* data));
 void array_release(struct array* array);
 
 int array_add(struct array* array, void* data);
-int array_find(struct array* array, int (*findfn)(void* data, void* arg), void* arg);
+void* array_find(struct array* array, int (*findfn)(void* data, void* arg), void* arg);
 
 #endif //_ARRAY_H_

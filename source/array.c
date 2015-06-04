@@ -51,23 +51,23 @@ int array_add(struct array* array, void* data)
     return ARRAY_OK;
 }
 
-int array_find(struct array* array, int (*findfn)(void* data, void* arg), void* arg)
+void* array_find(struct array* array, int (*findfn)(void* data, void* arg), void* arg)
 {
-    CHECK_IF(array == NULL, return -1, "array is null");
+    CHECK_IF(array == NULL, return NULL, "array is null");
 
-    if (array->num == 0) return -1;
+    if (array->num == 0) return NULL;
 
     int i;
     for (i=0; i<array->num; i++)
     {
         if (findfn)
         {
-            if (findfn(array->datas[i], arg)) return i;
+            if (findfn(array->datas[i], arg)) return array->datas[i];
         }
         else
         {
-            if (array->datas[i] == arg) return i;
+            if (array->datas[i] == arg) return array->datas[i];
         }
     }
-    return -1;
+    return NULL;
 }
