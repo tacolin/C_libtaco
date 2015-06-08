@@ -55,9 +55,6 @@ enum
 ////////////////////////////////////////////////////////////////////////////////
 static struct array* _nodes       = NULL;
 static cli_func _regular_fn       = NULL;
-static char* _username            = NULL;
-static char* _password            = NULL;
-static struct tcp_server _server  = {};
 ////////////////////////////////////////////////////////////////////////////////
 
 static void _clean_str(void* data)
@@ -450,7 +447,6 @@ void cli_show_cmds(int node_id)
 
 struct array* cli_get_completions(int node_id, char* string, char** output)
 {
-    CHECK_IF(_server.is_init == 0, return NULL, "cli system is not running");
     CHECK_IF(string == NULL, return NULL, "string is null");
     CHECK_IF(output == NULL, return NULL, "output is null");
 
@@ -524,7 +520,6 @@ struct array* cli_get_completions(int node_id, char* string, char** output)
 
 int cli_excute_cmd(int node_id, char* string)
 {
-    CHECK_IF(_server.is_init == 0, return CMD_FAIL, "cli system is not running");
     CHECK_IF(string == NULL, return CMD_FAIL, "string is null");
     CHECK_IF(strlen(string) > CMD_MAX_INPUT_SIZE, return CMD_FAIL, "string len = %d invalid", strlen(string));
 
@@ -657,7 +652,6 @@ static int _install_wrapper(struct cli_cmd* parent, struct array* str_array, cli
 
 int cli_install_cmd(int node_id, struct cli_cmd_cfg* cfg)
 {
-    CHECK_IF(_server.is_init == 1, return CMD_FAIL, "cli system is already running");
     CHECK_IF(cfg == NULL, return CMD_FAIL, "cfg is null");
     CHECK_IF(cfg->func == NULL, return CMD_FAIL, "cfg->func is null");
     CHECK_IF(cfg->cmd_str == NULL, return CMD_FAIL, "cfg->cmd_str is null");
@@ -685,69 +679,8 @@ int cli_install_cmd(int node_id, struct cli_cmd_cfg* cfg)
     return CMD_OK;
 }
 
-int cli_server_init(char* username, char* password, int port, int* server_fd)
-{
-    CHECK_IF(server_fd == NULL, return CMD_FAIL, "server_fd is null");
-    CHECK_IF(_server.is_init == 1, return CMD_FAIL, "cli system is already running");
-
-    int chk = tcp_server_init(&_server, NULL, port, CMD_MAX_CONN_NUM);
-    CHECK_IF(chk != TCP_OK, return CMD_FAIL, "tcp_server_init failed");
-
-    _username = (username) ? strdup(username) : NULL ;
-    _password = (password) ? strdup(password) : NULL ;
-
-    *server_fd = _server.fd;
-    return CMD_OK;
-}
-
-void cli_server_uninit(void)
-{
-    CHECK_IF(_server.is_init == 0, return, "cli system is not running");
-
-    tcp_server_uninit(&_server);
-    if (_username)
-    {
-        free(_username);
-        _username = NULL;
-    }
-
-    if (_password)
-    {
-        free(_password);
-        _password = NULL;
-    }
-    return;
-}
-
-int cli_server_accept(struct cli* cli)
-{
-    CHECK_IF(_server.is_init == 0, return CMD_FAIL, "cli system is not running");
-    CHECK_IF(cli == NULL, return CMD_FAIL, "cli is null");
-
-    memset(cli, 0, sizeof(struct cli));
-
-    int chk = tcp_server_accept(&_server, &cli->tcp);
-    CHECK_IF(chk != TCP_OK, return CMD_FAIL, "tcp_server_accept failed");
-
-    cli->fd = cli->tcp.fd;
-    return CMD_OK;
-}
-
-void cli_uninit(struct cli* cli)
-{
-    CHECK_IF(cli == NULL, return, "cli is null");
-
-    tcp_client_uninit(&cli->tcp);
-    cli->fd = -1;
-    return;
-}
-
-int cli_process(struct cli* cli);
-
 int cli_sys_init(void)
 {
-    CHECK_IF(_server.is_init == 1, return CMD_FAIL, "cli system is already running");
-
     _nodes = array_create(_clean_node);
     return CMD_OK;
 }

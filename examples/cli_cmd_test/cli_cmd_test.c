@@ -44,9 +44,6 @@ int main(int argc, char const *argv[])
 
     cli_show_cmds(exec_id);
 
-    int fd;
-    cli_server_init("5566", "i am sad", 55666, &fd);
-
     dprint("show me the money:");
     cli_excute_cmd(exec_id, "show me the money");
 
@@ -75,8 +72,6 @@ int main(int argc, char const *argv[])
     }
     free(output);
     array_release(completions);
-
-    cli_server_uninit();
 
     cli_sys_uninit();
     dprint("ok");
