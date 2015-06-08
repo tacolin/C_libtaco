@@ -42,6 +42,46 @@ static void _clearLine(struct tcp* tcp, char *cmd, int len)
     memset(cmd, 0, len);
 }
 
+struct cli
+{
+    unsigned char c;
+
+    char cmd[MAX_CMD_SIZE];
+    int len = 0;
+
+    char* oldcmd;
+    int oldlen;
+
+    int cursor;
+
+    char* prompt;
+
+    bool is_option;
+    bool esc;
+
+    bool pre = 1;
+    char lastchar = 0;
+    int in_history = 0;
+    bool insert_mode = 1;
+    bool is_delete = 0;
+};
+
+int cli_init(struct cli* cli)
+{
+    CHECK_IF(cli == NULL, return CLI_FAIL, "cli is null");
+
+    memset(cli, 0, sizeof(struct cli));
+
+    cli->is_option   = false;
+    cli->esc         = false;
+    cli->pre         = true;
+    cli->insert_mode = true;
+    cli->is_delete   = false;
+
+    return CLI_OK;
+}
+
+
 static int _process(struct tcp* tcp)
 {
     static unsigned char c;
