@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "cli.h"
+#include "cli_server.h"
 
 #define CTRL(key) (key - '@')
 
