@@ -1,6 +1,7 @@
 #ifndef _CLI_H_
 #define _CLI_H_
 
+#include "array.h"
 #include "history.h"
 #include "tcp.h"
 
@@ -11,9 +12,43 @@
 #define MAX_CLI_CMD_HISTORY_NUM (10)
 #define CLI_RETRY_COUNT (2)
 
+#define cli_print(cli, msg, param...)\
+{\
+    char* __tmp;\
+    asprintf(&__tmp, msg"\n\r", ##param);\
+    cli_send(cli, __tmp, strlen(__tmp)+1);\
+    free(__tmp);\
+}
+
+#define cli_error(cli, msg, param...)\
+{\
+    char* __tmp;\
+    asprintf(&__tmp, "> "msg"\n\r", ##param);\
+    cli_send(cli, __tmp, strlen(__tmp)+1);\
+    free(__tmp);\
+}
+
+#define DEFUN(funcname, cmdcfgname, cmdstr, ...) \
+    static int funcname(struct cli* cli, int argc, char* argv[]);\
+    struct cli_cmd_cfg cmdcfgname = \
+    {\
+        .cmd_str = (char*)cmdstr, \
+        .func = funcname, \
+        .descs = (char*[]){__VA_ARGS__, NULL}, \
+    };\
+    static int funcname(struct cli* cli, int argc, char* argv[])
+
 struct cli;
+struct cli_node;
 
 typedef int (*cli_func)(struct cli* cli, int argc, char* argv[]);
+
+struct cli_cmd_cfg
+{
+    char* cmd_str;
+    cli_func func;
+    char** descs;
+};
 
 enum
 {
@@ -49,6 +84,11 @@ struct cli
     char* password;
     int count;
 
+    struct array* nodes;
+    cli_func regular;
+
+    int node_id;
+
     int state;
 
     struct history* history;
@@ -68,6 +108,11 @@ struct cli_server
     char* banner;
     char* username;
     char* password;
+
+    struct array* nodes;
+    cli_func regular;
+
+    struct cli_node* default_node;
 };
 
 // connection
@@ -84,11 +129,12 @@ int cli_recv(struct cli* cli, void* buffer, int buffer_size);
 int cli_send(struct cli* cli, void* data, int data_len);
 
 // command
-// int cli_server_set_regular(struct cli_server* server, cli_func regular_fn);
-// int cli_server_install_node(struct cli_server* server, int id, char* prompt);
-// int cli_server_install_cmd(struct cli_server* server, int node_id, struct cli_cmd_cfg* cfg);
+int cli_server_set_regular(struct cli_server* server, cli_func regular);
+int cli_server_install_node(struct cli_server* server, int id, char* prompt);
+int cli_server_install_cmd(struct cli_server* server, int node_id, struct cli_cmd_cfg* cfg);
+int cli_server_set_default_node(struct cli_server* server, int id);
 
-// int cli_execute_cmd(struct cli* cli, int node_id, char* string);
-// struct array* cli_get_completions(struct cli* cli, int node_id, char* string, char** output);
+int cli_execute_cmd(struct cli* cli, int node_id, char* string);
+struct array* cli_get_completions(struct cli* cli, int node_id, char* string, char** output);
 
 #endif //_CLI_H_
