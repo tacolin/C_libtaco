@@ -53,6 +53,19 @@ int cli_server_uninit(struct cli_server* server)
     tcp_server_uninit(&server->tcp_server);
     server->fd = -1;
     server->is_init = 0;
+
+    if (server->username)
+    {
+        free(server->username);
+        server->username = NULL;
+    }
+
+    if (server->password)
+    {
+        free(server->password);
+        server->password = NULL;
+    }
+
     return CLI_OK;
 }
 
@@ -158,6 +171,7 @@ int cli_recv(struct cli* cli, void* buffer, int buffer_size)
 int cli_send(struct cli* cli, void* data, int data_len)
 {
     CHECK_IF(cli == NULL, return -1, "cli is null");
+    CHECK_IF(data_len <= 0, return -1, "data_len = %d invalid", data_len);
 
     return tcp_send(&cli->tcp, data, data_len);
 }
@@ -220,7 +234,10 @@ static void _del_one_char(struct cli* cli)
         }
         // 這一段主要是去更新跟清除 telnet client 那邊螢幕上的游標跟字
         // 詳細的可以自己體會 ...(因為說明很麻煩 ?)
-        cli_send(cli, cli->cmd + cli->cursor, strlen(cli->cmd + cli->cursor));
+        if (strlen(cli->cmd + cli->cursor) > 0)
+        {
+            cli_send(cli, cli->cmd + cli->cursor, strlen(cli->cmd + cli->cursor));
+        }
         cli_send(cli, " ", 1);
         for (i=0; i<= (int)strlen(cli->cmd + cli->cursor); i++)
         {
@@ -256,10 +273,10 @@ static void _clear_line(struct cli* cli)
 
 static int _proc_ctrl(struct cli* cli, unsigned char *c)
 {
-    if (cli->state != CLI_ST_NORMAL)
-    {
-        return PROC_NONE;
-    }
+    // if (cli->state != CLI_ST_NORMAL)
+    // {
+    //     return PROC_NONE;
+    // }
 
     if (*c == 27)
     {
@@ -544,15 +561,14 @@ static int _proc_login(struct cli* cli)
             cli->state = CLI_ST_NORMAL;
             free(cli->prompt);
             cli->prompt = strdup("[taco]$ ");
+            cli->count = 0;
         }
-        cli->count = 0;
 
         return PROC_PRE_CONT;
     }
 
     cli_send(cli, "\n\r", 2);
     cli_send(cli, "Invalid Username.\n\r", strlen("Invalid Username.\n\r"));
-    cli_send(cli, "\n\r", 2);
 
     if (cli->count < CLI_RETRY_COUNT)
     {
@@ -575,7 +591,6 @@ static int _proc_password(struct cli* cli)
 
     cli_send(cli, "\n\r", 2);
     cli_send(cli, "Invalid Password.\n\r", strlen("Invalid Password.\n\r"));
-    cli_send(cli, "\n\r", 2);
 
     if (cli->count < CLI_RETRY_COUNT)
     {
@@ -633,6 +648,12 @@ int cli_process(struct cli* cli)
 
     if (c == '\n')
     {
+        goto _CONT;
+    }
+
+    if (c == '\r')
+    {
+        // 收到 return 除了換行以外，下次還要重新印 prompt
         if (cli->state == CLI_ST_NORMAL)
         {
             // 找適合的 command 並執行 callback
@@ -640,18 +661,21 @@ int cli_process(struct cli* cli)
         }
         else if (cli->state == CLI_ST_LOGIN)
         {
-            _proc_login(cli);
+            ret = _proc_login(cli);
+            if (ret == PROC_ERROR)
+            {
+                goto _ERROR;
+            }
         }
         else if (cli->state == CLI_ST_PASSWORD)
         {
-            _proc_password(cli);
+            ret = _proc_password(cli);
+            if (ret == PROC_ERROR)
+            {
+                goto _ERROR;
+            }
         }
-        goto _CONT;
-    }
 
-    if (c == '\r')
-    {
-        // 收到 return 除了換行以外，下次還要重新印 prompt
         cli_send(cli, "\r\n", 2);
         goto _PRE_CONT;
     }

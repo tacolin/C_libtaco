@@ -7,7 +7,7 @@
 #define CLI_FAIL (-1)
 
 #define MAX_CLI_CMD_SIZE (100)
-#define CLI_RETRY_COUNT (3)
+#define CLI_RETRY_COUNT (2)
 
 enum
 {
