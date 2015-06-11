@@ -16,11 +16,6 @@
     }\
 }
 
-static const char _negotiate[] = "\xFF\xFB\x03"
-                                 "\xFF\xFB\x01"
-                                 "\xFF\xFD\x03"
-                                 "\xFF\xFD\x01";
-
 int cli_server_init(struct cli_server* server, char* ipv4, int local_port, int max_conn_num, char* username, char* password)
 {
     CHECK_IF(server == NULL, return CLI_FAIL, "server is null");
@@ -66,6 +61,12 @@ int cli_server_uninit(struct cli_server* server)
         server->password = NULL;
     }
 
+    if (server->banner)
+    {
+        free(server->banner);
+        server->banner = NULL;
+    }
+
     return CLI_OK;
 }
 
@@ -106,6 +107,16 @@ static void _pre_process(struct cli* cli)
     return;
 }
 
+static void _show_banner(struct cli* cli)
+{
+    if (cli->banner)
+    {
+        cli_send(cli, "\r\n", 2);
+        cli_send(cli, cli->banner, strlen(cli->banner));
+        cli_send(cli, "\r\n", 2);
+    }
+}
+
 int cli_server_accept(struct cli_server* server, struct cli* cli)
 {
     CHECK_IF(server == NULL, return CLI_FAIL, "server is null");
@@ -118,6 +129,7 @@ int cli_server_accept(struct cli_server* server, struct cli* cli)
     int chk = tcp_server_accept(&server->tcp_server, &cli->tcp);
     CHECK_IF(chk != TCP_OK, return CLI_FAIL, "tcp_server_accept failed");
 
+    cli->history     = history_create(MAX_CLI_CMD_SIZE+1, MAX_CLI_CMD_HISTORY_NUM);
     cli->pre         = 1;
     cli->insert_mode = 1;
     cli->fd          = cli->tcp.fd;
@@ -130,17 +142,29 @@ int cli_server_accept(struct cli_server* server, struct cli* cli)
     if (cli->state == CLI_ST_NORMAL)
     {
         cli->prompt = strdup("[taco]$ ");
+        _show_banner(cli);
+        cli_send(cli, "\r\n", 2);
     }
     else if (cli->state == CLI_ST_LOGIN)
     {
         cli->prompt = strdup("UserName: ");
     }
 
-    cli_send(cli, (void*)_negotiate, strlen(_negotiate));
+    const char negotiate[] = "\xFF\xFB\x03"
+                             "\xFF\xFB\x01"
+                             "\xFF\xFD\x03"
+                             "\xFF\xFD\x01";
+
+    cli_send(cli, (void*)negotiate, strlen(negotiate));
 
     _pre_process(cli);
 
     return CLI_OK;
+}
+
+static void _print_history(int idx, void* data)
+{
+    derror("[%d] : %s", idx, (char*)data);
 }
 
 int cli_uninit(struct cli* cli)
@@ -150,6 +174,13 @@ int cli_uninit(struct cli* cli)
     CHECK_IF(cli->fd <= 0, return CLI_FAIL, "cli fd = %d invalid", cli->fd);
 
     tcp_client_uninit(&cli->tcp);
+
+    if (cli->history)
+    {
+        history_do_all(cli->history, _print_history);
+        history_release(cli->history);
+        cli->history = NULL;
+    }
 
     if (cli->prompt)
     {
@@ -249,21 +280,20 @@ static void _del_one_char(struct cli* cli)
 
 static void _clear_line(struct cli* cli)
 {
-    int i;
-    for (i=0; i<cli->len; i++)
-    {
-        cli_send(cli, "\b", 1);
-    }
+    if (cli->len <= 0) return;
 
-    for (i=0; i<cli->len; i++)
-    {
-        cli_send(cli, " ", 1);
-    }
+    unsigned char data[cli->len + 1];
 
-    for (i=0 ;i<cli->len; i++)
-    {
-        cli_send(cli, "\b", 1);
-    }
+    data[cli->len] = '\0';
+
+    memset(data, '\b', cli->cursor);
+    cli_send(cli, data, cli->cursor);
+
+    memset(data, ' ', cli->len);
+    cli_send(cli, data, cli->len);
+
+    memset(data, '\b', cli->len);
+    cli_send(cli, data, cli->len);
 
     memset(cli->cmd, 0, cli->len);
     cli->len    = 0;
@@ -271,13 +301,22 @@ static void _clear_line(struct cli* cli)
     return;
 }
 
+static void _change_curr_cmd(struct cli* cli, char* newcmd)
+{
+    derror("valid 1");
+    _clear_line(cli);
+    derror("valid 2");
+
+    snprintf(cli->cmd, MAX_CLI_CMD_SIZE, "%s", newcmd);
+
+    cli->len = strlen(cli->cmd);
+    cli->cursor = strlen(cli->cmd);
+
+    cli_send(cli, cli->cmd, cli->len);
+}
+
 static int _proc_ctrl(struct cli* cli, unsigned char *c)
 {
-    // if (cli->state != CLI_ST_NORMAL)
-    // {
-    //     return PROC_NONE;
-    // }
-
     if (*c == 27)
     {
         // 如果收到 27 表示是 ESC 控制字元，標記起來，等待下一個 byte
@@ -343,7 +382,8 @@ static int _proc_ctrl(struct cli* cli, unsigned char *c)
     {
         // 收到 ctrl c 那就回傳 alert，對方就會聽到「噹」一聲
         cli_send(cli, "\a", 1);
-        return PROC_CONT;
+        cli_send(cli, "\r\n", 2);
+        return PROC_PRE_CONT;
     }
 
     //  backword          backspace         delete
@@ -491,10 +531,34 @@ static int _proc_ctrl(struct cli* cli, unsigned char *c)
         return PROC_CONT;
     }
 
-    if (*c == CTRL('P') || *c == CTRL('N'))
+    if (*c == CTRL('P'))
     {
-        // up or down, show history
-        // TODO
+        cli->history_idx--;
+        if (cli->history_idx < 0)
+        {
+            cli->history_idx = 0;
+            cli_send(cli, "\a", 1);
+        }
+        else
+        {
+            char* newcmd = (char*)history_get(cli->history, cli->history_idx);
+            _change_curr_cmd(cli, newcmd);
+        }
+        return PROC_CONT;
+    }
+    else if (*c == CTRL('N'))
+    {
+        cli->history_idx++;
+        if (cli->history_idx >= history_num(cli->history))
+        {
+            cli->history_idx = history_num(cli->history) - 1;
+            cli_send(cli, "\a", 1);
+        }
+        else
+        {
+            char* newcmd = (char*)history_get(cli->history, cli->history_idx);
+            _change_curr_cmd(cli, newcmd);
+        }
         return PROC_CONT;
     }
 
@@ -562,7 +626,10 @@ static int _proc_login(struct cli* cli)
             free(cli->prompt);
             cli->prompt = strdup("[taco]$ ");
             cli->count = 0;
-        }
+
+            cli_send(cli, "\r\n", 2);
+             _show_banner(cli);
+       }
 
         return PROC_PRE_CONT;
     }
@@ -586,6 +653,9 @@ static int _proc_password(struct cli* cli)
         free(cli->prompt);
         cli->prompt = strdup("[taco]$ ");
         cli->count = 0;
+
+        cli_send(cli, "\r\n", 2);
+        _show_banner(cli);
         return PROC_PRE_CONT;
     }
 
@@ -602,6 +672,21 @@ static int _proc_password(struct cli* cli)
         return PROC_PRE_CONT;
     }
     return PROC_ERROR;
+}
+
+static int _is_empty_string(char* string)
+{
+    char* dup = strdup(string);
+    char* scratch = NULL;
+    char*  delimiters = " \r\n\t";
+    char* text = strtok_r(dup, delimiters, &scratch);
+    if (text == NULL)
+    {
+        free(dup);
+        return 1;
+    }
+    free(dup);
+    return 0;
 }
 
 int cli_process(struct cli* cli)
@@ -636,6 +721,10 @@ int cli_process(struct cli* cli)
     {
         goto _ERROR;
     }
+    else if (ret == PROC_PRE_CONT)
+    {
+        goto _PRE_CONT;
+    }
 
     if (c == '?' && cli->cursor == cli->len)
     {
@@ -658,6 +747,12 @@ int cli_process(struct cli* cli)
         {
             // 找適合的 command 並執行 callback
             // TODO
+
+            if (!_is_empty_string(cli->cmd))
+            {
+                history_addstr(cli->history, cli->cmd);
+            }
+            cli->history_idx = history_num(cli->history);
         }
         else if (cli->state == CLI_ST_LOGIN)
         {
@@ -719,7 +814,14 @@ int cli_process(struct cli* cli)
         cli->cursor++;
     }
 
-    cli_send(cli, &c, 1);
+    if (cli->state == CLI_ST_PASSWORD)
+    {
+        cli_send(cli, "*", 1);
+    }
+    else
+    {
+        cli_send(cli, &c, 1);
+    }
 
     cli->oldcmd   = NULL;
     cli->oldlen   = 0;

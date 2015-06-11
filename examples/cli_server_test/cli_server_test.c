@@ -588,9 +588,14 @@ int main(int argc, char const *argv[])
     struct cli_server server = {};
     struct cli cli = {};
 
-    cli_server_init(&server, NULL, 5000, 10, "5566", "i am sad");
-    // cli_server_init(&server, NULL, 5000, 10, NULL, NULL);
+    // cli_server_init(&server, NULL, 5000, 10, "5566", "i am sad");
+    // cli_server_init(&server, NULL, 5000, 10, "5566", NULL);
+    cli_server_init(&server, NULL, 5000, 10, NULL, NULL);
 
+    cli_server_set_banner(&server,
+                          "+---------------------+\n\r"
+                          "|  This is My Banner  |\n\r"
+                          "+---------------------+");
     fd_set readset;
     int select_ret;
     struct timeval timeout;

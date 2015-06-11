@@ -15,6 +15,9 @@ int history_addstr(struct history* h, char* str);
 int history_do(struct history* h, int start, int end, void (*execfn)(int idx, void* data));
 int history_do_all(struct history* h, void (*execfn)(int idx, void* data));
 
+void* history_get(struct history* h, int idx);
+int history_num(struct history* h);
+
 int history_clear(struct history* h);
 
 #endif //_HISTORY_H_
