@@ -32,6 +32,29 @@ DEFUN(_show_me_the_money,
     return CLI_OK;
 }
 
+DEFUN(_show_me_the_cash,
+      _show_me_the_cash_cmd,
+      "show me the cash",
+      "desc 1",
+      "desc 2",
+      "desc 3",
+      "desc 4")
+{
+    cli_print(cli, "your cash is too less to be shown");
+    return CLI_OK;
+}
+
+DEFUN(_input_id,
+      _input_id_cmd,
+      "input id <1-500>",
+      "this is input",
+      "this is id",
+      "this is id value")
+{
+    cli_print(cli, "id value = %s", argv[0]);
+    return CLI_OK;
+}
+
 int main(int argc, char const *argv[])
 {
     signal(SIGINT, _sigIntHandler);
@@ -51,6 +74,8 @@ int main(int argc, char const *argv[])
     cli_server_install_node(&server, 100, "[taco]$ ");
 
     cli_server_install_cmd(&server, 100, &_show_me_the_money_cmd);
+    cli_server_install_cmd(&server, 100, &_show_me_the_cash_cmd);
+    cli_server_install_cmd(&server, 100, &_input_id_cmd);
 
     fd_set readset;
     int select_ret;

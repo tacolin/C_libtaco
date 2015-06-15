@@ -376,14 +376,280 @@ static void _clear_line(struct cli* cli)
 
 static void _change_curr_cmd(struct cli* cli, char* newcmd)
 {
-    _clear_line(cli);
+    if (strlen(newcmd) > cli->len)
+    {
+        int i;
+        for (i=0; i<cli->len; i++)
+        {
+            if (cli->cmd[i] != newcmd[i])
+            {
+                break;
+            }
+        }
 
-    snprintf(cli->cmd, MAX_CLI_CMD_SIZE, "%s", newcmd);
+        int start = i;
 
-    cli->len = strlen(cli->cmd);
-    cli->cursor = strlen(cli->cmd);
+        for (i=start; i<cli->len; i++)
+        {
+            cli_send(cli, "\b", 1);
+        }
 
-    cli_send(cli, cli->cmd, cli->len);
+        for (i=start; i<strlen(newcmd); i++)
+        {
+            cli_send(cli, newcmd+i, 1);
+        }
+
+        snprintf(cli->cmd, MAX_CLI_CMD_SIZE, "%s", newcmd);
+
+        cli->len = strlen(cli->cmd);
+        cli->cursor = strlen(cli->cmd);
+    }
+    else if (strlen(newcmd) <= cli->len)
+    {
+        int i;
+        for (i=strlen(newcmd); i<cli->len; i++)
+        {
+            _del_one_char(cli);
+        }
+
+        for (i=0; i<strlen(newcmd); i++)
+        {
+            if (cli->cmd[i] != newcmd[i])
+            {
+                break;
+            }
+        }
+
+        int start = i;
+
+        for (i=start; i<strlen(newcmd); i++)
+        {
+            cli_send(cli, newcmd+i, 1);
+        }
+
+        snprintf(cli->cmd, MAX_CLI_CMD_SIZE, "%s", newcmd);
+
+        cli->len = strlen(cli->cmd);
+        cli->cursor = strlen(cli->cmd);
+    }
+}
+
+static int _compare_cmd_str(void* data, void* arg)
+{
+    struct cli_cmd* c = (struct cli_cmd*)data;
+    char* str = (char*)arg;
+    bool ret;
+
+    if (c->type == CMD_TOKEN)
+    {
+        ret = (0 == strcmp(c->str, str));
+    }
+    else if (c->type == CMD_INT)
+    {
+        // long lbound, ubound;
+        // sscanf(c->str, "<%ld-%ld>", &lbound, &ubound);
+
+        long value = strtol(str, NULL, 10);
+        if ((value == ERANGE) || (value > c->ubound) || (value < c->lbound))
+        {
+            ret = false;
+        }
+        else
+        {
+            ret = true;
+        }
+    }
+    else if (c->type == CMD_IPV4)
+    {
+        int ipv4[4];
+        int num = sscanf(str, "%d.%d.%d.%d", &ipv4[0], &ipv4[1], &ipv4[2], &ipv4[3]);
+        ret = (num == 4) ? true : false;
+    }
+    else if (c->type == CMD_MACADDR)
+    {
+        int mac[6];
+        int num = sscanf(str, "%x:%x:%x:%x:%x:%x", &mac[0], &mac[1], &mac[2], &mac[3], &mac[4], &mac[5]);
+        ret = (num == 6) ? true : false;
+    }
+    else if (c->type == CMD_STRING)
+    {
+        ret = (str != NULL) ? true : false ;
+    }
+    return ret;
+}
+
+
+enum
+{
+    CLI_FULL_MATCH,
+    CLI_PARTIAL_MATCH,
+    CLI_MULTI_MATCHES,
+    CLI_NO_MATCH,
+
+    CLI_MATCH_TYPES
+};
+
+static int _match_cmd(struct array* sub_cmds, char* cmd_str, struct array** matches)
+{
+    *matches = array_create(NULL);
+
+    struct cli_cmd* cmd = (struct cli_cmd*)array_find(sub_cmds, _compare_cmd_str, cmd_str);
+    if (cmd != NULL)
+    {
+        array_add(*matches, cmd);
+        return CLI_FULL_MATCH;
+    }
+    else
+    {
+        int i;
+        for (i=0; i<sub_cmds->num; i++)
+        {
+            cmd = (struct cli_cmd*)(sub_cmds->datas[i]);
+            if ((cmd->type == CMD_TOKEN) && (cmd->str == strstr(cmd->str, cmd_str)))
+            {
+                array_add(*matches, cmd);
+            }
+        }
+
+        if ((*matches)->num == 1)
+        {
+            return CLI_PARTIAL_MATCH;
+        }
+        else if ((*matches)->num > 1)
+        {
+            return CLI_MULTI_MATCHES;
+        }
+        else
+        {
+            return CLI_NO_MATCH;
+        }
+    }
+}
+
+static void _clean_str(void* data)
+{
+    if (data) free(data);
+}
+
+static struct array* _string_to_array(char* string, char* delimiters)
+{
+    CHECK_IF(string == NULL, return NULL, "string is null");
+    CHECK_IF(delimiters == NULL, return NULL, "delimiters is null");
+
+    struct array* a = array_create(_clean_str);
+
+    char* scratch = NULL;
+    char* dup     = strdup(string);
+    char* text    = strtok_r(dup, delimiters, &scratch);
+    while (text)
+    {
+        array_add(a, strdup(text));
+        text = strtok_r(NULL, delimiters, &scratch);
+    }
+    free(dup);
+    return a;
+}
+
+static int _proc_tab(struct cli* cli, unsigned char* c)
+{
+    if (cli->cursor != cli->len)
+    {
+        return PROC_CONT;
+    }
+
+    struct cli_node* node = _get_node(cli->nodes, cli->node_id);
+    if (node == NULL)
+    {
+        return PROC_CONT;
+    }
+
+    char newcmd[MAX_CLI_CMD_SIZE+1] = {0};
+    struct array* sub_cmds  = node->cmds;
+    struct array* str_array = _string_to_array(cli->cmd, " \r\n\t");
+    int ret = CLI_NO_MATCH;
+
+    if (cli->lastchar == CTRL('I'))
+    {
+        // double TAB
+        int i;
+        for (i=0; i<str_array->num; i++)
+        {
+            struct cli_cmd* cmd = (struct cli_cmd*)array_find(sub_cmds, _compare_cmd_str, (char*)str_array->datas[i]);
+            sub_cmds = cmd->sub_cmds;
+            derror("cmd = %s", cmd->str);
+        }
+
+        for (i=0; i<sub_cmds->num; i++)
+        {
+            if ((i % 4) == 0)
+            {
+                cli_send(cli, "\r\n", 2);
+            }
+
+            struct cli_cmd* cmd = (struct cli_cmd*)sub_cmds->datas[i];
+            cli_send(cli, cmd->str, strlen(cmd->str)+1);
+            cli_send(cli, "\t", 1);
+        }
+
+        cli_send(cli, "\r\n", 2);
+
+        array_release(str_array);
+
+        cli->lastchar = ' ';
+
+        return PROC_PRE_CONT;
+    }
+    else
+    {
+        // 1 TAB
+        struct array* matches = NULL;
+        int i;
+        for (i=0; i<str_array->num; i++)
+        {
+            ret = _match_cmd(sub_cmds, (char*)str_array->datas[i], &matches);
+            derror("i = %d, ret = %d", i, ret);
+            if (ret == CLI_FULL_MATCH)
+            {
+                struct cli_cmd* cmd = (struct cli_cmd*)matches->datas[0];
+                array_release(matches);
+                sub_cmds = cmd->sub_cmds;
+
+                strcat(newcmd, cmd->str);
+                strcat(newcmd, " ");
+            }
+            else if (ret == CLI_PARTIAL_MATCH)
+            {
+                struct cli_cmd* cmd = (struct cli_cmd*)matches->datas[0];
+                array_release(matches);
+                sub_cmds = cmd->sub_cmds;
+
+                strcat(newcmd, cmd->str);
+                strcat(newcmd, " ");
+            }
+            else if (ret == CLI_MULTI_MATCHES)
+            {
+                strcat(newcmd, (char*)str_array->datas[i]);
+                array_release(matches);
+                break;
+            }
+            else //(ret == CLI_NO_MATCH)
+            {
+                strcat(newcmd, (char*)str_array->datas[i]);
+                array_release(matches);
+                break;
+            }
+        }
+        array_release(str_array);
+        _change_curr_cmd(cli, newcmd);
+
+        if ((cli->oldlen == cli->len) && (ret != CLI_NO_MATCH))
+        {
+            cli->lastchar = CTRL('I');
+        }
+        cli->oldlen = cli->len;
+
+        return PROC_CONT;
+    }
 }
 
 static int _proc_ctrl(struct cli* cli, unsigned char *c)
@@ -571,58 +837,7 @@ static int _proc_ctrl(struct cli* cli, unsigned char *c)
     if (*c == CTRL('I'))
     {
         // TAB
-        if (cli->cursor != cli->len) return PROC_CONT;
-
-        char* newcmd = NULL;
-        struct array* completions;
-        completions = cli_get_completions(cli, cli->node_id, cli->cmd, &newcmd);
-
-        int num_completions = completions->num;
-
-        derror("num_completions = %d", num_completions);
-
-        if (num_completions == 0)
-        {
-            cli_send(cli, "\a", 1);
-        }
-        else if (num_completions == 1)
-        {
-            // show one complete
-            _change_curr_cmd(cli, newcmd);
-        }
-        else if (num_completions > 1)
-        {
-            cli->lastchar = *c;
-            cli_send(cli, "\a", 1);
-        }
-        else if (cli->lastchar == CTRL('I'))
-        {
-            // double TAB
-            cli_send(cli, "\r\n", 2);
-
-            // show all completions
-            int i;
-            char* elem;
-            for (i=0; i<num_completions; i++)
-            {
-                elem = (char*)completions->datas[i];
-                cli_send(cli, elem, strlen(elem)+1);
-                cli_send(cli, "\t", 1);
-
-                if (((i+1) % 4) == 0)
-                {
-                    cli_send(cli, "\r\n", 2);
-                }
-            }
-
-            if (newcmd) free(newcmd);
-            array_release(completions);
-            return PROC_PRE_CONT;
-        }
-
-        if (newcmd) free(newcmd);
-        array_release(completions);
-        return PROC_CONT;
+        return _proc_tab(cli, c);
     }
 
     if (*c == CTRL('P'))
@@ -1084,30 +1299,6 @@ static char* _pre_process_string(char* string)
     return tmp;
 }
 
-static void _clean_str(void* data)
-{
-    if (data) free(data);
-}
-
-static struct array* _string_to_array(char* string, char* delimiters)
-{
-    CHECK_IF(string == NULL, return NULL, "string is null");
-    CHECK_IF(delimiters == NULL, return NULL, "delimiters is null");
-
-    struct array* a = array_create(_clean_str);
-
-    char* scratch = NULL;
-    char* dup     = strdup(string);
-    char* text    = strtok_r(dup, delimiters, &scratch);
-    while (text)
-    {
-        array_add(a, strdup(text));
-        text = strtok_r(NULL, delimiters, &scratch);
-    }
-    free(dup);
-    return a;
-}
-
 static bool _is_all_upper(char* text)
 {
     int i;
@@ -1317,50 +1508,6 @@ int cli_server_install_cmd(struct cli_server* server, int node_id, struct cli_cm
     return CLI_OK;
 }
 
-static int _compare_cmd_str(void* data, void* arg)
-{
-    struct cli_cmd* c = (struct cli_cmd*)data;
-    char* str = (char*)arg;
-    bool ret;
-
-    if (c->type == CMD_TOKEN)
-    {
-        ret = (0 == strcmp(c->str, str));
-    }
-    else if (c->type == CMD_INT)
-    {
-        // long lbound, ubound;
-        // sscanf(c->str, "<%ld-%ld>", &lbound, &ubound);
-
-        long value = strtol(str, NULL, 10);
-        if ((value == ERANGE) || (value > c->ubound) || (value < c->lbound))
-        {
-            ret = false;
-        }
-        else
-        {
-            ret = true;
-        }
-    }
-    else if (c->type == CMD_IPV4)
-    {
-        int ipv4[4];
-        int num = sscanf(str, "%d.%d.%d.%d", &ipv4[0], &ipv4[1], &ipv4[2], &ipv4[3]);
-        ret = (num == 4) ? true : false;
-    }
-    else if (c->type == CMD_MACADDR)
-    {
-        int mac[6];
-        int num = sscanf(str, "%x:%x:%x:%x:%x:%x", &mac[0], &mac[1], &mac[2], &mac[3], &mac[4], &mac[5]);
-        ret = (num == 6) ? true : false;
-    }
-    else if (c->type == CMD_STRING)
-    {
-        ret = (str != NULL) ? true : false ;
-    }
-    return ret;
-}
-
 static struct array* _get_fit_cmds(struct array* source, char* str)
 {
     struct array* ret = array_create(NULL);
@@ -1466,6 +1613,44 @@ int cli_execute_cmd(struct cli* cli, int node_id, char* string)
     return CLI_OK;
 }
 
+struct array* cli_get_possibilities(struct cli* cli, int node_id, char* string)
+{
+    CHECK_IF(cli == NULL, return NULL, "cli is null");
+    CHECK_IF(cli->is_init != 1, return NULL, "cli is not init yet");
+    CHECK_IF(cli->fd <= 0, return NULL, "cli fd = %d invalid", cli->fd);
+    CHECK_IF(string == NULL, return NULL, "string is null");
+
+    struct cli_node* node = _get_node(cli->nodes, node_id);
+    CHECK_IF(node == NULL, return NULL, "node with id = %d is not in the list", node_id);
+
+    struct array* cmds      = node->cmds;
+    struct array* str_array = _string_to_array(string, " \r\n\t");
+    struct array* fit_cmds  = NULL;
+    struct array* ret       = array_create(NULL);
+
+    int i;
+    for (i=0; i<str_array->num; i++)
+    {
+        fit_cmds = _get_fit_cmds(cmds, (char*)str_array->datas[i]);
+        CHECK_IF(fit_cmds == NULL, break, "_get_fit_cmds failed");
+
+        struct cli_cmd* fit_cmd = (struct cli_cmd*)(fit_cmds->datas[0]);
+        cmds = fit_cmd->sub_cmds;
+
+        array_release(fit_cmds);
+        fit_cmds = NULL;
+    }
+
+    for (i=0; i<cmds->num; i++)
+    {
+        struct cli_cmd* cmd = (struct cli_cmd*)(cmds->datas[i]);
+        array_add(ret, cmd->str);
+    }
+
+    array_release(str_array);
+    return ret;
+}
+
 struct array* cli_get_completions(struct cli* cli, int node_id, char* string, char** output)
 {
     CHECK_IF(cli == NULL, return NULL, "cli is null");
@@ -1495,7 +1680,7 @@ struct array* cli_get_completions(struct cli* cli, int node_id, char* string, ch
         if (fit_cmds->num == 0) // 連一個可能的都沒有
         {
             strcat(*output, (char*)str_array->datas[i]);
-            strcat(*output, " ");
+            // strcat(*output, " ");
             cmds = NULL;
         }
         else if (fit_cmds->num == 1) // 100% 比對成功，只會找到一個
@@ -1513,10 +1698,22 @@ struct array* cli_get_completions(struct cli* cli, int node_id, char* string, ch
             }
             strcat(*output, " ");
             cmds = fit_cmd->sub_cmds;
+
+            if (i == str_array->num-1)
+            {
+                // 最後一次  把可能的 completions 結果填到 ret 當中
+                int j;
+                struct cli_cmd* cmd;
+                for (j=0; j<fit_cmds->num; j++)
+                {
+                    cmd = (struct cli_cmd*)(fit_cmds->datas[j]);
+                    array_add(ret, cmd->str);
+                }
+            }
         }
         else // 非 100% 比對成功，找到多個有可能的
         {
-            if (i == fit_cmds->num-1)
+            if (i == str_array->num-1)
             {
                 // 最後一次  把可能的 completions 結果填到 ret 當中
                 strcat(*output, (char*)fit_cmds->datas[i]);
@@ -1524,7 +1721,7 @@ struct array* cli_get_completions(struct cli* cli, int node_id, char* string, ch
                 struct cli_cmd* cmd;
                 for (j=0; j<fit_cmds->num; j++)
                 {
-                    cmd = (struct cli_cmd*)(fit_cmds->datas[i]);
+                    cmd = (struct cli_cmd*)(fit_cmds->datas[j]);
                     array_add(ret, cmd->str);
                 }
             }

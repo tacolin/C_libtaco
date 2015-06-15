@@ -136,5 +136,6 @@ int cli_server_set_default_node(struct cli_server* server, int id);
 
 int cli_execute_cmd(struct cli* cli, int node_id, char* string);
 struct array* cli_get_completions(struct cli* cli, int node_id, char* string, char** output);
+struct array* cli_get_possibilities(struct cli* cli, int node_id, char* string);
 
 #endif //_CLI_H_
