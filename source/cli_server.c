@@ -6,6 +6,8 @@
 
 #include "cli_server.h"
 
+////////////////////////////////////////////////////////////////////////////////
+
 #define CTRL(key) (key - '@')
 
 #define STR_EQUAL(str1, str2) (0 == strcmp(str1, str2))
@@ -13,6 +15,7 @@
 #define IS_OPT_CMD(str) (str[0] == '[')
 #define IS_ALT_CMD(str) (str[0] == '(')
 
+#define dprint(a, b...) fprintf(stdout, "%s(): "a"\n", __func__, ##b)
 #define derror(a, b...) fprintf(stderr, "[ERROR] %s(): "a"\n", __func__, ##b)
 #define CHECK_IF(assertion, error_action, ...) \
 {\
@@ -22,6 +25,17 @@
         {error_action;} \
     }\
 }
+
+////////////////////////////////////////////////////////////////////////////////
+
+enum
+{
+    CLI_ST_LOGIN,
+    CLI_ST_PASSWORD,
+    CLI_ST_NORMAL,
+
+    CLI_STATES
+};
 
 enum
 {
@@ -33,6 +47,28 @@ enum
 
     CMD_TYPES
 };
+
+enum
+{
+    PROC_CONT,
+    PROC_PRE_CONT,
+    PROC_ERROR,
+    PROC_NONE,
+
+    PROC_RETURN_VALUES
+};
+
+enum
+{
+    CLI_FULL_MATCH,
+    CLI_PARTIAL_MATCH,
+    CLI_MULTI_MATCHES,
+    CLI_NO_MATCH,
+
+    CLI_MATCH_TYPES
+};
+
+////////////////////////////////////////////////////////////////////////////////
 
 struct cli_node
 {
@@ -54,6 +90,8 @@ struct cli_cmd
     long lbound;
 };
 
+////////////////////////////////////////////////////////////////////////////////
+
 static int _compare_node_id(void* data, void* arg)
 {
     struct cli_node* n = (struct cli_node*)data;
@@ -63,7 +101,7 @@ static int _compare_node_id(void* data, void* arg)
 
 static struct cli_node* _get_node(struct array* array, int id)
 {
-    return array_find(array, _compare_node_id, &id);
+    return (struct cli_node*)array_find(array, _compare_node_id, &id);
 }
 
 static void _clean_node(void* data)
@@ -77,18 +115,18 @@ static void _clean_node(void* data)
     }
 }
 
-int cli_server_init(struct cli_server* server, char* ipv4, int local_port, int max_conn_num, char* username, char* password)
+int cli_server_init(struct cli_server* server, char* local_ipv4, int local_port, int max_conn_num, char* username, char* password)
 {
     CHECK_IF(server == NULL, return CLI_FAIL, "server is null");
+    CHECK_IF(max_conn_num <= 0, return CLI_FAIL, "server is null");
 
     memset(server, 0, sizeof(struct cli_server));
 
-    int chk = tcp_server_init(&server->tcp_server, ipv4, local_port, max_conn_num);
+    int chk = tcp_server_init(&server->tcp_server, local_ipv4, local_port, max_conn_num);
     CHECK_IF(chk != TCP_OK, return CLI_FAIL, "tcp_server_init failed");
 
-    server->fd = server->tcp_server.fd;
+    server->fd    = server->tcp_server.fd;
     server->nodes = array_create(_clean_node);
-
     if (username)
     {
         server->username = strdup(username);
@@ -97,7 +135,6 @@ int cli_server_init(struct cli_server* server, char* ipv4, int local_port, int m
             server->password = strdup(password);
         }
     }
-
     server->is_init = 1;
     return CLI_OK;
 }
@@ -135,17 +172,15 @@ int cli_server_uninit(struct cli_server* server)
         free(server->banner);
         server->banner = NULL;
     }
-
     return CLI_OK;
 }
 
-int cli_server_set_banner(struct cli_server* server, char* banner)
+int cli_server_banner(struct cli_server* server, char* banner)
 {
     CHECK_IF(server == NULL, return CLI_FAIL, "server is null");
     CHECK_IF(banner == NULL, return CLI_FAIL, "banner is null");
     CHECK_IF(server->fd <= 0, return CLI_FAIL, "server fd = %d invalid", server->fd);
     CHECK_IF(server->is_init != 1, return CLI_FAIL, "server is not init yet");
-
     server->banner = strdup(banner);
     return CLI_OK;
 }
@@ -157,7 +192,7 @@ static void _show_prompt(struct cli* cli)
 
 static void _pre_process(struct cli* cli)
 {
-    if (cli->oldcmd != NULL) // 把上一次的cmd變成現在的cmd
+    if (cli->oldcmd != NULL)
     {
         cli->len    = cli->oldlen;
         cli->cursor = cli->oldlen;
@@ -167,7 +202,7 @@ static void _pre_process(struct cli* cli)
     }
     else
     {
-        memset(cli->cmd, 0, MAX_CLI_CMD_SIZE+1);
+        memset(cli->cmd, 0, CLI_MAX_CMD_SIZE+1);
         cli->len    = 0;
         cli->cursor = 0;
     }
@@ -198,7 +233,7 @@ int cli_server_accept(struct cli_server* server, struct cli* cli)
     int chk = tcp_server_accept(&server->tcp_server, &cli->tcp);
     CHECK_IF(chk != TCP_OK, return CLI_FAIL, "tcp_server_accept failed");
 
-    cli->history     = history_create(MAX_CLI_CMD_SIZE+1, MAX_CLI_CMD_HISTORY_NUM);
+    cli->history     = history_create(CLI_MAX_CMD_SIZE+1, CLI_MAX_CMD_HISTORY_NUM);
     cli->pre         = 1;
     cli->insert_mode = 1;
     cli->fd          = cli->tcp.fd;
@@ -223,21 +258,17 @@ int cli_server_accept(struct cli_server* server, struct cli* cli)
         cli->prompt = strdup("UserName: ");
     }
 
-    const char negotiate[] = "\xFF\xFB\x03"
-                             "\xFF\xFB\x01"
-                             "\xFF\xFD\x03"
-                             "\xFF\xFD\x01";
+    const char negotiate[] = "\xFF\xFB\x03" "\xFF\xFB\x01"
+                             "\xFF\xFD\x03" "\xFF\xFD\x01";
 
-    cli_send(cli, (void*)negotiate, strlen(negotiate));
-
+    cli_send(cli, (void*)negotiate, strlen(negotiate)+1);
     _pre_process(cli);
-
     return CLI_OK;
 }
 
 static void _print_history(int idx, void* data)
 {
-    derror("[%d] : %s", idx, (char*)data);
+    dprint("[%d] : %s", idx, (char*)data);
 }
 
 int cli_uninit(struct cli* cli)
@@ -260,41 +291,23 @@ int cli_uninit(struct cli* cli)
         free(cli->prompt);
         cli->prompt = NULL;
     }
-    cli->fd = -1;
+    
+    cli->fd      = -1;
     cli->is_init = 0;
     return CLI_OK;
-}
-
-int cli_recv(struct cli* cli, void* buffer, int buffer_size)
-{
-    CHECK_IF(cli == NULL, return -1, "cli is null");
-
-    return tcp_recv(&cli->tcp, buffer, buffer_size);
 }
 
 int cli_send(struct cli* cli, void* data, int data_len)
 {
     CHECK_IF(cli == NULL, return -1, "cli is null");
     CHECK_IF(data_len <= 0, return -1, "data_len = %d invalid", data_len);
-
     return tcp_send(&cli->tcp, data, data_len);
 }
-
-enum
-{
-    PROC_CONT,
-    PROC_PRE_CONT,
-    PROC_ERROR,
-    PROC_NONE,
-
-    PROC_RETURN_VALUES
-};
 
 static int _proc_option(struct cli* cli, unsigned char c)
 {
     if ((c == 255) && (cli->is_option == 0))
-    {
-        // 收到 255  表示下一次收到的 byte 是拿來做 option 的，先標記起來
+    {        
         cli->is_option++;
         return PROC_CONT;
     }
@@ -302,19 +315,16 @@ static int _proc_option(struct cli* cli, unsigned char c)
     if (cli->is_option)
     {
         if ((c >= 251) && (c <= 254))
-        {
-            // 如果收到 251~254  表示 option 還沒結束  繼續
+        {            
             cli->is_option = c;
             return PROC_CONT;
         }
         else if (c != 255)
-        {
-            // 如果不是 251~254，也不是 255，那就表示 opt 結束了
+        {            
             cli->is_option = 0;
             return PROC_CONT;
         }
 
-        // 收到 255 第二次，表示要處理之前收到的資料
         cli->is_option = 0;
     }
     return PROC_NONE;
@@ -329,20 +339,19 @@ static void _del_one_char(struct cli* cli)
     }
     else
     {
-        // 東湊西湊湊出 delete ...
-        // 先把自己儲存的 cmd 更新 (刪除某一個char)
         int i;
         for (i=cli->cursor; i<=cli->len; i++)
         {
             cli->cmd[i] = cli->cmd[i+1];
         }
-        // 這一段主要是去更新跟清除 telnet client 那邊螢幕上的游標跟字
-        // 詳細的可以自己體會 ...(因為說明很麻煩 ?)
+
         if (strlen(cli->cmd + cli->cursor) > 0)
         {
             cli_send(cli, cli->cmd + cli->cursor, strlen(cli->cmd + cli->cursor));
         }
+
         cli_send(cli, " ", 1);
+
         for (i=0; i<= (int)strlen(cli->cmd + cli->cursor); i++)
         {
             cli_send(cli, "\b", 1);
@@ -376,9 +385,9 @@ static void _clear_line(struct cli* cli)
 
 static void _change_curr_cmd(struct cli* cli, char* newcmd)
 {
+    int i;
     if (strlen(newcmd) > cli->len)
     {
-        int i;
         for (i=0; i<cli->len; i++)
         {
             if (cli->cmd[i] != newcmd[i])
@@ -399,14 +408,13 @@ static void _change_curr_cmd(struct cli* cli, char* newcmd)
             cli_send(cli, newcmd+i, 1);
         }
 
-        snprintf(cli->cmd, MAX_CLI_CMD_SIZE, "%s", newcmd);
+        snprintf(cli->cmd, CLI_MAX_CMD_SIZE, "%s", newcmd);
 
         cli->len = strlen(cli->cmd);
         cli->cursor = strlen(cli->cmd);
     }
     else if (strlen(newcmd) <= cli->len)
     {
-        int i;
         for (i=strlen(newcmd); i<cli->len; i++)
         {
             _del_one_char(cli);
@@ -427,11 +435,12 @@ static void _change_curr_cmd(struct cli* cli, char* newcmd)
             cli_send(cli, newcmd+i, 1);
         }
 
-        snprintf(cli->cmd, MAX_CLI_CMD_SIZE, "%s", newcmd);
+        snprintf(cli->cmd, CLI_MAX_CMD_SIZE, "%s", newcmd);
 
         cli->len = strlen(cli->cmd);
         cli->cursor = strlen(cli->cmd);
     }
+    return;
 }
 
 static int _compare_cmd_str(void* data, void* arg)
@@ -477,17 +486,6 @@ static int _compare_cmd_str(void* data, void* arg)
     }
     return ret;
 }
-
-
-enum
-{
-    CLI_FULL_MATCH,
-    CLI_PARTIAL_MATCH,
-    CLI_MULTI_MATCHES,
-    CLI_NO_MATCH,
-
-    CLI_MATCH_TYPES
-};
 
 static int _match_cmd(struct array* sub_cmds, char* cmd_str, struct array** matches)
 {
@@ -561,8 +559,22 @@ static void _show_desc(struct cli* cli)
     struct array* sub_cmds = node->cmds;
     int i;
 
-    if (cli->lastchar == ' ')
+    if (str_array->num == 0)
     {
+        cli_send(cli, "\r\n", 2);
+
+        for (i=0; i<sub_cmds->num; i++)
+        {
+            struct cli_cmd* cmd = (struct cli_cmd*)sub_cmds->datas[i];
+            char* output_string;
+            asprintf(&output_string, "%s\t: %s", cmd->str, cmd->desc);
+            cli_send(cli, output_string, strlen(output_string)+1);
+            cli_send(cli, "\r\n", 2);
+            free(output_string);
+        }       
+    }
+    else if (cli->lastchar == ' ')
+    {        
         for (i=0; i<str_array->num; i++)
         {
             struct cli_cmd* cmd = (struct cli_cmd*)array_find(sub_cmds, _compare_cmd_str, (char*)str_array->datas[i]);
@@ -571,7 +583,7 @@ static void _show_desc(struct cli* cli)
                 goto _END;
             }
             sub_cmds = cmd->sub_cmds;
-        }
+        }        
 
         if (sub_cmds == NULL)
         {
@@ -584,7 +596,7 @@ static void _show_desc(struct cli* cli)
         {
             struct cli_cmd* cmd = (struct cli_cmd*)sub_cmds->datas[i];
             char* output_string;
-            asprintf(&output_string, "%s : %s", cmd->str, cmd->desc);
+            asprintf(&output_string, "%s\t: %s", cmd->str, cmd->desc);
             cli_send(cli, output_string, strlen(output_string)+1);
             cli_send(cli, "\r\n", 2);
             free(output_string);
@@ -602,7 +614,6 @@ static void _show_desc(struct cli* cli)
             sub_cmds = cmd->sub_cmds;
         }
 
-        derror("str_array->num = %d", str_array->num);
         char* str = (char*)str_array->datas[str_array->num-1];
 
         if (sub_cmds == NULL)
@@ -618,7 +629,7 @@ static void _show_desc(struct cli* cli)
             if ((cmd->type == CMD_TOKEN) && (cmd->str == strstr(cmd->str, str)))
             {
                 char* output_string;
-                asprintf(&output_string, "%s : %s", cmd->str, cmd->desc);
+                asprintf(&output_string, "%s\t: %s", cmd->str, cmd->desc);
                 cli_send(cli, output_string, strlen(output_string)+1);
                 cli_send(cli, "\r\n", 2);
                 free(output_string);
@@ -644,7 +655,7 @@ static int _proc_tab(struct cli* cli, unsigned char* c)
         return PROC_CONT;
     }
 
-    char newcmd[MAX_CLI_CMD_SIZE+1] = {0};
+    char newcmd[CLI_MAX_CMD_SIZE+1] = {0};
     struct array* sub_cmds  = node->cmds;
     struct array* str_array = _string_to_array(cli->cmd, " \r\n\t");
     int ret = CLI_NO_MATCH;
@@ -682,7 +693,7 @@ static int _proc_tab(struct cli* cli, unsigned char* c)
     }
     else
     {
-        // 1 TAB
+        // 1 TAB       
         struct array* matches = NULL;
         int i;
         for (i=0; i<str_array->num; i++)
@@ -723,10 +734,7 @@ static int _proc_tab(struct cli* cli, unsigned char* c)
         array_release(str_array);
         _change_curr_cmd(cli, newcmd);
 
-        if ((cli->oldlen == cli->len) && (ret != CLI_NO_MATCH))
-        {
-            cli->lastchar = CTRL('I');
-        }
+        cli->lastchar = CTRL('I');
         cli->oldlen = cli->len;
 
         return PROC_CONT;
@@ -918,6 +926,7 @@ static int _proc_ctrl(struct cli* cli, unsigned char *c)
     if (*c == CTRL('I'))
     {
         // TAB
+        derror("recv tab");
         return _proc_tab(cli, c);
     }
 
@@ -1028,7 +1037,7 @@ static int _proc_login(struct cli* cli)
     cli_send(cli, "\n\r", 2);
     cli_send(cli, "Invalid Username.\n\r", strlen("Invalid Username.\n\r"));
 
-    if (cli->count < CLI_RETRY_COUNT)
+    if (cli->count < CLI_MAX_RETRY_NUM)
     {
         cli->count++;
         return PROC_PRE_CONT;
@@ -1055,7 +1064,7 @@ static int _proc_password(struct cli* cli)
     cli_send(cli, "\n\r", 2);
     cli_send(cli, "Invalid Password.\n\r", strlen("Invalid Password.\n\r"));
 
-    if (cli->count < CLI_RETRY_COUNT)
+    if (cli->count < CLI_MAX_RETRY_NUM)
     {
         cli->count++;
         cli->state = CLI_ST_LOGIN;
@@ -1082,6 +1091,102 @@ static int _is_empty_string(char* string)
     return 0;
 }
 
+static struct array* _get_fit_cmds(struct array* source, char* str)
+{
+    struct array* ret = array_create(NULL);
+
+    if ((source == NULL) || (str == NULL)) return ret;
+
+    struct cli_cmd* cmd = (struct cli_cmd*)array_find(source, _compare_cmd_str, str);
+    if (cmd)
+    {
+        array_add(ret, cmd);
+    }
+    else
+    {
+        int i;
+        for (i=0; i<source->num; i++)
+        {
+            cmd = (struct cli_cmd*)source->datas[i];
+            derror("cmd->type = %d", cmd->type);
+            derror("cmd->str = %s", cmd->str);
+            if ((cmd->type == CMD_TOKEN) && (cmd->str == strstr(cmd->str, str)))
+            {
+                derror("add one");
+                array_add(ret, cmd);
+            }
+        }
+    }
+    return ret;
+}
+
+static int _execute_cmd(struct cli* cli, int node_id, char* string)
+{
+    CHECK_IF(cli == NULL, return CLI_FAIL, "cli is null");
+    CHECK_IF(cli->is_init != 1, return CLI_FAIL, "cli is not init yet");
+    CHECK_IF(cli->fd <= 0, return CLI_FAIL, "cli fd = %d invalid", cli->fd);
+
+    CHECK_IF(string == NULL, return CLI_FAIL, "string is null");
+    CHECK_IF(strlen(string) > CLI_MAX_CMD_SIZE, return CLI_FAIL, "string len = %d invalid", strlen(string));
+
+    struct cli_node* node = _get_node(cli->nodes, node_id);
+    CHECK_IF(node == NULL, return CLI_FAIL, "node with id = %d does not exist", node_id);
+
+    struct array* str_array = _string_to_array(string, " \r\t\n");
+    CHECK_IF(str_array == NULL, return CLI_FAIL, "_string_to_array failed");
+
+    struct array* cmds      = node->cmds;
+    struct array* fit_cmds  = NULL;
+    struct array* arguments = array_create(NULL);
+    int i;
+    bool running = true;
+    for (i=0; i<str_array->num && running; i++)
+    {
+        fit_cmds = _get_fit_cmds(cmds, (char*)str_array->datas[i]);
+        if (fit_cmds->num == 1)
+        {
+            struct cli_cmd* c = (struct cli_cmd*)fit_cmds->datas[0];
+            if (c->type != CMD_TOKEN)
+            {
+                array_add(arguments, str_array->datas[i]);
+            }
+
+            if (i == str_array->num-1)
+            {
+                if (c->func)
+                {
+                    cli_send(cli, "\r\n", 2);
+                    c->func(cli, arguments->num, (char**)arguments->datas);
+                    running = false;
+                }
+                else
+                {
+                    if (cli->regular)
+                    {
+                        cli_send(cli, "\r\n", 2);
+                        cli->regular(cli, 1, &string);
+                    }
+                }
+            }
+            cmds = c->sub_cmds;
+        }
+        else
+        {
+            if (cli->regular)
+            {
+                cli_send(cli, "\r\n", 2);
+                cli->regular(cli, 1, &string);
+            }
+
+            running = false;
+        }
+        array_release(fit_cmds);
+    }
+    array_release(str_array);
+    array_release(arguments);
+    return CLI_OK;
+}
+
 int cli_process(struct cli* cli)
 {
     CHECK_IF(cli == NULL, return CLI_FAIL, "cli is null");
@@ -1092,7 +1197,7 @@ int cli_process(struct cli* cli)
     int recvlen = -1;
     unsigned char c;
 
-    recvlen = cli_recv(cli, &c, 1);
+    recvlen = tcp_recv(&cli->tcp, &c, 1);
     if (recvlen <= 0)
     {
         // tcp recv failed or connection closed
@@ -1123,7 +1228,6 @@ int cli_process(struct cli* cli)
     {
         // show help str / description
         _show_desc(cli);
-        // TODO
         goto _PRE_CONT;
     }
 
@@ -1136,11 +1240,9 @@ int cli_process(struct cli* cli)
 
     if (c == '\r')
     {
-        // 收到 return 除了換行以外，下次還要重新印 prompt
         if (cli->state == CLI_ST_NORMAL)
         {
-            // 找適合的 command 並執行 callback
-            cli_execute_cmd(cli, cli->node_id, cli->cmd);
+            _execute_cmd(cli, cli->node_id, cli->cmd);
 
             if (!_is_empty_string(cli->cmd))
             {
@@ -1170,7 +1272,7 @@ int cli_process(struct cli* cli)
     }
 
     // normal cahracter typed
-    if (cli->len >= MAX_CLI_CMD_SIZE)
+    if (cli->len >= CLI_MAX_CMD_SIZE)
     {
         cli_send(cli, "\a", 1);
         goto _CONT;
@@ -1233,12 +1335,13 @@ _ERROR:
 }
 
 
-int cli_server_set_regular(struct cli_server* server, cli_func regular)
+int cli_server_regular_func(struct cli_server* server, cli_func regular)
 {
     CHECK_IF(server == NULL, return CLI_FAIL, "server is null");
     CHECK_IF(server->fd <= 0, return CLI_FAIL, "server fd = %d invalid", server->fd);
     CHECK_IF(server->is_init != 1, return CLI_FAIL, "server is not init yet");
     server->regular = regular;
+    return CLI_OK;
 }
 
 static void _clean_cmd(void* data)
@@ -1590,239 +1693,7 @@ int cli_server_install_cmd(struct cli_server* server, int node_id, struct cli_cm
     return CLI_OK;
 }
 
-static struct array* _get_fit_cmds(struct array* source, char* str)
-{
-    struct array* ret = array_create(NULL);
-
-    if ((source == NULL) || (str == NULL)) return ret;
-
-    struct cli_cmd* cmd = (struct cli_cmd*)array_find(source, _compare_cmd_str, str);
-    if (cmd)
-    {
-        // 如果有 100% 比對到的話，那就是只有一個 (包含所有的 cmd type)
-        array_add(ret, cmd);
-    }
-    else
-    {
-        // 沒有 100% 正確的  就會以 token 為根據，找出有可能的 completions
-        int i;
-        for (i=0; i<source->num; i++)
-        {
-            cmd = (struct cli_cmd*)source->datas[i];
-            derror("cmd->type = %d", cmd->type);
-            derror("cmd->str = %s", cmd->str);
-            if ((cmd->type == CMD_TOKEN) && (cmd->str == strstr(cmd->str, str)))
-            {
-                derror("add one");
-                array_add(ret, cmd);
-            }
-        }
-    }
-    return ret;
-}
-
-int cli_execute_cmd(struct cli* cli, int node_id, char* string)
-{
-    CHECK_IF(cli == NULL, return CLI_FAIL, "cli is null");
-    CHECK_IF(cli->is_init != 1, return CLI_FAIL, "cli is not init yet");
-    CHECK_IF(cli->fd <= 0, return CLI_FAIL, "cli fd = %d invalid", cli->fd);
-
-    CHECK_IF(string == NULL, return CLI_FAIL, "string is null");
-    CHECK_IF(strlen(string) > MAX_CLI_CMD_SIZE, return CLI_FAIL, "string len = %d invalid", strlen(string));
-
-    struct cli_node* node = _get_node(cli->nodes, node_id);
-    CHECK_IF(node == NULL, return CLI_FAIL, "node with id = %d does not exist", node_id);
-
-    struct array* str_array = _string_to_array(string, " \r\t\n");
-    CHECK_IF(str_array == NULL, return CLI_FAIL, "_string_to_array failed");
-
-    struct array* cmds      = node->cmds;
-    struct array* fit_cmds  = NULL;
-    struct array* arguments = array_create(NULL);
-    int i;
-    bool running = true;
-    for (i=0; i<str_array->num && running; i++)
-    {
-        fit_cmds = _get_fit_cmds(cmds, (char*)str_array->datas[i]);
-        if (fit_cmds->num == 1)
-        {
-            // 100% 比對成功，只有一個
-            struct cli_cmd* c = (struct cli_cmd*)fit_cmds->datas[0];
-            if (c->type != CMD_TOKEN)
-            {
-                // 不是 token 的話，一律視為變數
-                array_add(arguments, str_array->datas[i]);
-            }
-
-            if (i == str_array->num-1)
-            {
-                if (c->func)
-                {
-                    // 如果是最後一個  而且有 callback function，執行，然後結束
-                    cli_send(cli, "\r\n", 2);
-                    c->func(cli, arguments->num, (char**)arguments->datas);
-                    running = false;
-                }
-                else
-                {
-                    // 如果最後一個， 但沒有 callback，視同找不到
-                    if (cli->regular)
-                    {
-                        cli_send(cli, "\r\n", 2);
-                        cli->regular(cli, 1, &string);
-                    }
-                }
-            }
-            // 繼續比下一層
-            cmds = c->sub_cmds;
-        }
-        else
-        {
-            // 沒有比到 (比到多個算是沒比到啦) 執行 regular callback
-            // 把完整的輸入字串當成變數丟進 regular callback
-            if (cli->regular)
-            {
-                cli_send(cli, "\r\n", 2);
-                cli->regular(cli, 1, &string);
-            }
-
-            running = false;
-        }
-        array_release(fit_cmds);
-    }
-    array_release(str_array);
-    array_release(arguments);
-    return CLI_OK;
-}
-
-struct array* cli_get_possibilities(struct cli* cli, int node_id, char* string)
-{
-    CHECK_IF(cli == NULL, return NULL, "cli is null");
-    CHECK_IF(cli->is_init != 1, return NULL, "cli is not init yet");
-    CHECK_IF(cli->fd <= 0, return NULL, "cli fd = %d invalid", cli->fd);
-    CHECK_IF(string == NULL, return NULL, "string is null");
-
-    struct cli_node* node = _get_node(cli->nodes, node_id);
-    CHECK_IF(node == NULL, return NULL, "node with id = %d is not in the list", node_id);
-
-    struct array* cmds      = node->cmds;
-    struct array* str_array = _string_to_array(string, " \r\n\t");
-    struct array* fit_cmds  = NULL;
-    struct array* ret       = array_create(NULL);
-
-    int i;
-    for (i=0; i<str_array->num; i++)
-    {
-        fit_cmds = _get_fit_cmds(cmds, (char*)str_array->datas[i]);
-        CHECK_IF(fit_cmds == NULL, break, "_get_fit_cmds failed");
-
-        struct cli_cmd* fit_cmd = (struct cli_cmd*)(fit_cmds->datas[0]);
-        cmds = fit_cmd->sub_cmds;
-
-        array_release(fit_cmds);
-        fit_cmds = NULL;
-    }
-
-    for (i=0; i<cmds->num; i++)
-    {
-        struct cli_cmd* cmd = (struct cli_cmd*)(cmds->datas[i]);
-        array_add(ret, cmd->str);
-    }
-
-    array_release(str_array);
-    return ret;
-}
-
-struct array* cli_get_completions(struct cli* cli, int node_id, char* string, char** output)
-{
-    CHECK_IF(cli == NULL, return NULL, "cli is null");
-    CHECK_IF(cli->is_init != 1, return NULL, "cli is not init yet");
-    CHECK_IF(cli->fd <= 0, return NULL, "cli fd = %d invalid", cli->fd);
-
-    CHECK_IF(string == NULL, return NULL, "string is null");
-    CHECK_IF(output == NULL, return NULL, "output is null");
-
-    struct cli_node* node = _get_node(cli->nodes, node_id);
-    CHECK_IF(node == NULL, return NULL, "node with id = %d is not in the list", node_id);
-
-    struct array* cmds      = node->cmds;
-    struct array* str_array = _string_to_array(string, " \r\n\t");
-    struct array* fit_cmds  = NULL;
-    struct array* ret       = array_create(NULL);
-
-    *output = calloc(MAX_CLI_CMD_SIZE+1, 1);
-    *output[0] = '\0';
-
-    int i;
-    for (i=0; i<str_array->num; i++)
-    {
-        fit_cmds = _get_fit_cmds(cmds, (char*)str_array->datas[i]);
-        CHECK_IF(fit_cmds == NULL, break, "_get_fit_cmds failed");
-
-        if (fit_cmds->num == 0) // 連一個可能的都沒有
-        {
-            strcat(*output, (char*)str_array->datas[i]);
-            // strcat(*output, " ");
-            cmds = NULL;
-        }
-        else if (fit_cmds->num == 1) // 100% 比對成功，只會找到一個
-        {
-            struct cli_cmd* fit_cmd = (struct cli_cmd*)(fit_cmds->datas[0]);
-            if (fit_cmd->type == CMD_TOKEN)
-            {
-                // 是 token 的話，會自動把字串補齊
-                strcat(*output, fit_cmd->str);
-            }
-            else
-            {
-                // 其他的話就照原本的輸入
-                strcat(*output, (char*)str_array->datas[i]);
-            }
-            strcat(*output, " ");
-            cmds = fit_cmd->sub_cmds;
-
-            if (i == str_array->num-1)
-            {
-                // 最後一次  把可能的 completions 結果填到 ret 當中
-                int j;
-                struct cli_cmd* cmd;
-                for (j=0; j<fit_cmds->num; j++)
-                {
-                    cmd = (struct cli_cmd*)(fit_cmds->datas[j]);
-                    array_add(ret, cmd->str);
-                }
-            }
-        }
-        else // 非 100% 比對成功，找到多個有可能的
-        {
-            if (i == str_array->num-1)
-            {
-                // 最後一次  把可能的 completions 結果填到 ret 當中
-                strcat(*output, (char*)fit_cmds->datas[i]);
-                int j;
-                struct cli_cmd* cmd;
-                for (j=0; j<fit_cmds->num; j++)
-                {
-                    cmd = (struct cli_cmd*)(fit_cmds->datas[j]);
-                    array_add(ret, cmd->str);
-                }
-            }
-            else
-            {
-                // 非最後一次  視同找不到
-                strcat(*output, (char*)str_array->datas[i]);
-                strcat(*output, " ");
-                cmds = NULL;
-            }
-        }
-        array_release(fit_cmds);
-        fit_cmds = NULL;
-    }
-    array_release(str_array);
-    return ret;
-}
-
-int cli_server_set_default_node(struct cli_server* server, int id)
+int cli_server_default_node(struct cli_server* server, int id)
 {
     CHECK_IF(server == NULL, return CLI_FAIL, "server is null");
     CHECK_IF(server->fd <= 0, return CLI_FAIL, "server fd = %d invalid", server->fd);

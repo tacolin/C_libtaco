@@ -65,12 +65,12 @@ int main(int argc, char const *argv[])
     // cli_server_init(&server, NULL, 5000, 10, "5566", "i am sad");
     // cli_server_init(&server, NULL, 5000, 10, "5566", NULL);
     cli_server_init(&server, NULL, 5000, 10, NULL, NULL);
-    cli_server_set_banner(&server,
+    cli_server_banner(&server,
                           "+---------------------+\n\r"
                           "|  This is My Banner  |\n\r"
                           "+---------------------+");
 
-    cli_server_set_regular(&server, _regular);
+    cli_server_regular_func(&server, _regular);
     cli_server_install_node(&server, 100, "[taco]$ ");
 
     cli_server_install_cmd(&server, 100, &_show_me_the_money_cmd);
