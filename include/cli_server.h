@@ -14,34 +14,6 @@
 
 ////////////////////////////////////////////////////////////////////////////////
 
-#define cli_print(cli, msg, param...)\
-{\
-    char* __tmp;\
-    asprintf(&__tmp, msg"\n\r", ##param);\
-    cli_send(cli, __tmp, strlen(__tmp)+1);\
-    free(__tmp);\
-}
-
-#define cli_error(cli, msg, param...)\
-{\
-    char* __tmp;\
-    asprintf(&__tmp, "> "msg"\n\r", ##param);\
-    cli_send(cli, __tmp, strlen(__tmp)+1);\
-    free(__tmp);\
-}
-
-#define DEFUN(funcname, cmdcfgname, cmdstr, ...) \
-    static int funcname(struct cli* cli, int argc, char* argv[]);\
-    struct cli_cmd_cfg cmdcfgname = \
-    {\
-        .cmd_str = (char*)cmdstr, \
-        .func = funcname, \
-        .descs = (char*[]){__VA_ARGS__, NULL}, \
-    };\
-    static int funcname(struct cli* cli, int argc, char* argv[])
-
-////////////////////////////////////////////////////////////////////////////////
-
 struct cli;
 struct cli_node;
 
@@ -134,7 +106,41 @@ int cli_server_default_node(struct cli_server* server, int id);
 int cli_uninit(struct cli* cli);
 int cli_process(struct cli* cli);
 
+int cli_change_node(struct cli* cli, int node_id);
+
+////////////////////////////////////////////////////////////////////////////////
+
 int cli_send(struct cli* cli, void* data, int data_len);
+
+////////////////////////////////////////////////////////////////////////////////
+
+#define cli_print(cli, msg, param...)\
+{\
+    char* __tmp;\
+    asprintf(&__tmp, msg"\n\r", ##param);\
+    cli_send(cli, __tmp, strlen(__tmp)+1);\
+    free(__tmp);\
+}
+
+#define cli_error(cli, msg, param...)\
+{\
+    char* __tmp;\
+    asprintf(&__tmp, "> "msg"\n\r", ##param);\
+    cli_send(cli, __tmp, strlen(__tmp)+1);\
+    free(__tmp);\
+}
+
+#define DEFUN(funcname, cmdcfgname, cmdstr, ...) \
+    static int funcname(struct cli* cli, int argc, char* argv[]);\
+    struct cli_cmd_cfg cmdcfgname = \
+    {\
+        .cmd_str = (char*)cmdstr, \
+        .func = funcname, \
+        .descs = (char*[]){__VA_ARGS__, NULL}, \
+    };\
+    static int funcname(struct cli* cli, int argc, char* argv[])
+
+////////////////////////////////////////////////////////////////////////////////
 
 #endif //_CLI_H_
 

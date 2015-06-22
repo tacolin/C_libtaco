@@ -386,7 +386,7 @@ static void _clear_line(struct cli* cli)
 static void _change_curr_cmd(struct cli* cli, char* newcmd)
 {
     int i;
-    if (strlen(newcmd) > cli->len)
+    if (strlen(newcmd) > cli->len) // newcmd len > currcmd len
     {
         for (i=0; i<cli->len; i++)
         {
@@ -413,11 +413,11 @@ static void _change_curr_cmd(struct cli* cli, char* newcmd)
         cli->len = strlen(cli->cmd);
         cli->cursor = strlen(cli->cmd);
     }
-    else if (strlen(newcmd) <= cli->len)
+    else // newcmd len <= currcmd len
     {
         for (i=strlen(newcmd); i<cli->len; i++)
         {
-            _del_one_char(cli);
+            cli_send(cli, "\b \b", 3);
         }
 
         for (i=0; i<strlen(newcmd); i++)
@@ -429,6 +429,11 @@ static void _change_curr_cmd(struct cli* cli, char* newcmd)
         }
 
         int start = i;
+
+        for (i=start; i<cli->len-1; i++) // why cli->len-1 ? trial and error ...
+        {
+            cli_send(cli, "\b", 1);
+        }
 
         for (i=start; i<strlen(newcmd); i++)
         {
@@ -745,15 +750,12 @@ static int _proc_ctrl(struct cli* cli, unsigned char *c)
 {
     if (*c == 27)
     {
-        // 如果收到 27 表示是 ESC 控制字元，標記起來，等待下一個 byte
         cli->esc = 1;
         return PROC_CONT;
     }
 
-    // 如果上一個收到的是 esc 控制字元的話
     if (cli->esc)
     {
-        // 處理上下左右箭頭鍵
         if (cli->esc == '[')
         {
             cli->esc = 0;
@@ -786,7 +788,7 @@ static int _proc_ctrl(struct cli* cli, unsigned char *c)
                     break;
             }
         }
-        else // 如果不是 [ 的控制字元我不想理會  (原因不明)
+        else
         {
             cli->esc = (*c == '[') ? *c : 0;
             return PROC_CONT;
@@ -806,7 +808,6 @@ static int _proc_ctrl(struct cli* cli, unsigned char *c)
 
     if (*c == CTRL('C'))
     {
-        // 收到 ctrl c 那就回傳 alert，對方就會聽到「噹」一聲
         cli_send(cli, "\a", 1);
         cli_send(cli, "\r\n", 2);
         return PROC_PRE_CONT;
@@ -838,7 +839,6 @@ static int _proc_ctrl(struct cli* cli, unsigned char *c)
         }
         else
         {
-            // 如果 backspace 或 delete 已經退到頭了，那就會響警示音
             if (cli->len == 0 || cli->cursor == 0)
             {
                 cli_send(cli, "\a", 1);
@@ -926,7 +926,6 @@ static int _proc_ctrl(struct cli* cli, unsigned char *c)
     if (*c == CTRL('I'))
     {
         // TAB
-        derror("recv tab");
         return _proc_tab(cli, c);
     }
 
@@ -1225,9 +1224,8 @@ int cli_process(struct cli* cli)
     }
 
     if (c == '?' && cli->cursor == cli->len)
-    {
-        // show help str / description
-        _show_desc(cli);
+    {        
+        _show_desc(cli); // show help str / description
         goto _PRE_CONT;
     }
 
@@ -1247,6 +1245,7 @@ int cli_process(struct cli* cli)
             if (!_is_empty_string(cli->cmd))
             {
                 history_addstr(cli->history, cli->cmd);
+                dprint("save history : %s", cli->cmd);
             }
             cli->history_idx = history_num(cli->history);
         }
@@ -1705,3 +1704,20 @@ int cli_server_default_node(struct cli_server* server, int id)
     server->default_node = node;
     return CLI_OK;
 }
+
+int cli_change_node(struct cli* cli, int node_id)
+{
+    CHECK_IF(cli == NULL, return CLI_FAIL, "cli is null");
+    CHECK_IF(cli->is_init != 1, return CLI_FAIL, "cli is not init yet");
+    CHECK_IF(cli->fd <= 0, return CLI_FAIL, "cli fd = %d invalid", cli->fd);   
+
+    struct cli_node* node = _get_node(cli->nodes, node_id);
+    CHECK_IF(node == NULL, return CLI_FAIL, "find no node with id = %d", node_id);
+
+    cli->node_id = node_id;
+    free(cli->prompt);
+    cli->prompt = strdup(node->prompt);
+
+    return CLI_OK;
+}
+
