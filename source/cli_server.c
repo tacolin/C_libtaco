@@ -550,6 +550,87 @@ static struct array* _string_to_array(char* string, char* delimiters)
     return a;
 }
 
+static void _show_desc(struct cli* cli)
+{
+    struct cli_node* node = _get_node(cli->nodes, cli->node_id);
+    CHECK_IF(node == NULL, return, "_get_node failed by node_id = %d", cli->node_id);
+
+    struct array* str_array = _string_to_array(cli->cmd, " \r\n\t");
+    CHECK_IF(str_array == NULL, return, "_string_to_array failed");
+
+    struct array* sub_cmds = node->cmds;
+    int i;
+
+    if (cli->lastchar == ' ')
+    {
+        for (i=0; i<str_array->num; i++)
+        {
+            struct cli_cmd* cmd = (struct cli_cmd*)array_find(sub_cmds, _compare_cmd_str, (char*)str_array->datas[i]);
+            if (cmd == NULL)
+            {
+                goto _END;
+            }
+            sub_cmds = cmd->sub_cmds;
+        }
+
+        if (sub_cmds == NULL)
+        {
+            goto _END;
+        }
+
+        cli_send(cli, "\r\n", 2);
+
+        for (i=0; i<sub_cmds->num; i++)
+        {
+            struct cli_cmd* cmd = (struct cli_cmd*)sub_cmds->datas[i];
+            char* output_string;
+            asprintf(&output_string, "%s : %s", cmd->str, cmd->desc);
+            cli_send(cli, output_string, strlen(output_string)+1);
+            cli_send(cli, "\r\n", 2);
+            free(output_string);
+        }
+    }
+    else
+    {
+        for (i=0; i<str_array->num-1; i++)
+        {
+            struct cli_cmd* cmd = (struct cli_cmd*)array_find(sub_cmds, _compare_cmd_str, (char*)str_array->datas[i]);
+            if (cmd == NULL)
+            {
+                goto _END;
+            }
+            sub_cmds = cmd->sub_cmds;
+        }
+
+        derror("str_array->num = %d", str_array->num);
+        char* str = (char*)str_array->datas[str_array->num-1];
+
+        if (sub_cmds == NULL)
+        {
+            goto _END;
+        }
+
+        cli_send(cli, "\r\n", 2);
+
+        for (i=0; i<sub_cmds->num; i++)
+        {
+            struct cli_cmd* cmd = (struct cli_cmd*)sub_cmds->datas[i];
+            if ((cmd->type == CMD_TOKEN) && (cmd->str == strstr(cmd->str, str)))
+            {
+                char* output_string;
+                asprintf(&output_string, "%s : %s", cmd->str, cmd->desc);
+                cli_send(cli, output_string, strlen(output_string)+1);
+                cli_send(cli, "\r\n", 2);
+                free(output_string);
+            }
+        }
+    }
+
+_END:
+    array_release(str_array);
+    return;
+}
+
 static int _proc_tab(struct cli* cli, unsigned char* c)
 {
     if (cli->cursor != cli->len)
@@ -1041,8 +1122,9 @@ int cli_process(struct cli* cli)
     if (c == '?' && cli->cursor == cli->len)
     {
         // show help str / description
+        _show_desc(cli);
         // TODO
-        goto _CONT;
+        goto _PRE_CONT;
     }
 
     if (c == 0) goto _CONT;
