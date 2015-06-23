@@ -108,6 +108,8 @@ int cli_process(struct cli* cli);
 
 int cli_change_node(struct cli* cli, int node_id);
 
+int cli_execute_cmd(struct cli* cli, char* string);
+
 ////////////////////////////////////////////////////////////////////////////////
 
 int cli_send(struct cli* cli, void* data, int data_len);

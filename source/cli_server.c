@@ -192,8 +192,12 @@ static void _show_prompt(struct cli* cli)
 
 static void _pre_process(struct cli* cli)
 {
+    _show_prompt(cli);
+
     if (cli->oldcmd != NULL)
     {
+        cli_send(cli, cli->oldcmd, cli->oldlen);
+
         cli->len    = cli->oldlen;
         cli->cursor = cli->oldlen;
         cli->pre    = 1;
@@ -206,7 +210,7 @@ static void _pre_process(struct cli* cli)
         cli->len    = 0;
         cli->cursor = 0;
     }
-    _show_prompt(cli);
+
     cli->pre = 0;
     return;
 }
@@ -291,7 +295,7 @@ int cli_uninit(struct cli* cli)
         free(cli->prompt);
         cli->prompt = NULL;
     }
-    
+
     cli->fd      = -1;
     cli->is_init = 0;
     return CLI_OK;
@@ -307,7 +311,7 @@ int cli_send(struct cli* cli, void* data, int data_len)
 static int _proc_option(struct cli* cli, unsigned char c)
 {
     if ((c == 255) && (cli->is_option == 0))
-    {        
+    {
         cli->is_option++;
         return PROC_CONT;
     }
@@ -315,12 +319,12 @@ static int _proc_option(struct cli* cli, unsigned char c)
     if (cli->is_option)
     {
         if ((c >= 251) && (c <= 254))
-        {            
+        {
             cli->is_option = c;
             return PROC_CONT;
         }
         else if (c != 255)
-        {            
+        {
             cli->is_option = 0;
             return PROC_CONT;
         }
@@ -576,10 +580,10 @@ static void _show_desc(struct cli* cli)
             cli_send(cli, output_string, strlen(output_string)+1);
             cli_send(cli, "\r\n", 2);
             free(output_string);
-        }       
+        }
     }
-    else if (cli->lastchar == ' ')
-    {        
+    else if ((cli->lastchar == ' ') || (cli->lastchar == '\t'))
+    {
         for (i=0; i<str_array->num; i++)
         {
             struct cli_cmd* cmd = (struct cli_cmd*)array_find(sub_cmds, _compare_cmd_str, (char*)str_array->datas[i]);
@@ -588,7 +592,7 @@ static void _show_desc(struct cli* cli)
                 goto _END;
             }
             sub_cmds = cmd->sub_cmds;
-        }        
+        }
 
         if (sub_cmds == NULL)
         {
@@ -641,6 +645,9 @@ static void _show_desc(struct cli* cli)
             }
         }
     }
+
+    cli->oldcmd = cli->cmd;
+    cli->oldlen = cli->len;
 
 _END:
     array_release(str_array);
@@ -698,7 +705,7 @@ static int _proc_tab(struct cli* cli, unsigned char* c)
     }
     else
     {
-        // 1 TAB       
+        // 1 TAB
         struct array* matches = NULL;
         int i;
         for (i=0; i<str_array->num; i++)
@@ -1107,11 +1114,8 @@ static struct array* _get_fit_cmds(struct array* source, char* str)
         for (i=0; i<source->num; i++)
         {
             cmd = (struct cli_cmd*)source->datas[i];
-            derror("cmd->type = %d", cmd->type);
-            derror("cmd->str = %s", cmd->str);
             if ((cmd->type == CMD_TOKEN) && (cmd->str == strstr(cmd->str, str)))
             {
-                derror("add one");
                 array_add(ret, cmd);
             }
         }
@@ -1186,6 +1190,11 @@ static int _execute_cmd(struct cli* cli, int node_id, char* string)
     return CLI_OK;
 }
 
+int cli_execute_cmd(struct cli* cli, char* string)
+{
+    return _execute_cmd(cli, cli->node_id, string);
+}
+
 int cli_process(struct cli* cli)
 {
     CHECK_IF(cli == NULL, return CLI_FAIL, "cli is null");
@@ -1224,7 +1233,7 @@ int cli_process(struct cli* cli)
     }
 
     if (c == '?' && cli->cursor == cli->len)
-    {        
+    {
         _show_desc(cli); // show help str / description
         goto _PRE_CONT;
     }
@@ -1709,7 +1718,7 @@ int cli_change_node(struct cli* cli, int node_id)
 {
     CHECK_IF(cli == NULL, return CLI_FAIL, "cli is null");
     CHECK_IF(cli->is_init != 1, return CLI_FAIL, "cli is not init yet");
-    CHECK_IF(cli->fd <= 0, return CLI_FAIL, "cli fd = %d invalid", cli->fd);   
+    CHECK_IF(cli->fd <= 0, return CLI_FAIL, "cli fd = %d invalid", cli->fd);
 
     struct cli_node* node = _get_node(cli->nodes, node_id);
     CHECK_IF(node == NULL, return CLI_FAIL, "find no node with id = %d", node_id);
