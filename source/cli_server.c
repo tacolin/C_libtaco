@@ -581,6 +581,7 @@ static void _show_desc(struct cli* cli)
             cli_send(cli, "\r\n", 2);
             free(output_string);
         }
+        cli_send(cli, "\r\n", 2);
     }
     else if ((cli->cmd[cli->len-1] == ' ') || (cli->cmd[cli->len-1] == '\t'))
     {
@@ -610,6 +611,7 @@ static void _show_desc(struct cli* cli)
             cli_send(cli, "\r\n", 2);
             free(output_string);
         }
+        cli_send(cli, "\r\n", 2);
     }
     else
     {
@@ -644,6 +646,7 @@ static void _show_desc(struct cli* cli)
                 free(output_string);
             }
         }
+        cli_send(cli, "\r\n", 2);
     }
 
     cli->oldcmd = cli->cmd;
@@ -694,6 +697,7 @@ static int _proc_tab(struct cli* cli, unsigned char* c)
             cli_send(cli, "\t", 1);
         }
 
+        cli_send(cli, "\r\n", 2);
         cli_send(cli, "\r\n", 2);
 
         array_release(str_array);
