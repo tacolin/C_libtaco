@@ -753,7 +753,7 @@ static int _proc_tab(struct cli* cli, unsigned char* c)
             }
         }
 
-        if ((cli->cmd[cli->len-1] == ' ') || (cli->cmd[cli->len-1] == '\t'))
+        if ((cli->cmd[cli->len-1] == ' ') || (cli->cmd[cli->len-1] == '\t') || (cli->len == 0))
         {
             if (sub_cmds->num == 1)
             {
