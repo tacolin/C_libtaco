@@ -582,7 +582,7 @@ static void _show_desc(struct cli* cli)
             free(output_string);
         }
     }
-    else if ((cli->lastchar == ' ') || (cli->lastchar == '\t'))
+    else if ((cli->cmd[cli->len-1] == ' ') || (cli->cmd[cli->len-1] == '\t'))
     {
         for (i=0; i<str_array->num; i++)
         {
@@ -680,7 +680,6 @@ static int _proc_tab(struct cli* cli, unsigned char* c)
         {
             struct cli_cmd* cmd = (struct cli_cmd*)array_find(sub_cmds, _compare_cmd_str, (char*)str_array->datas[i]);
             sub_cmds = cmd->sub_cmds;
-            derror("cmd = %s", cmd->str);
         }
 
         for (i=0; i<sub_cmds->num; i++)
@@ -701,6 +700,9 @@ static int _proc_tab(struct cli* cli, unsigned char* c)
 
         cli->lastchar = ' ';
 
+        cli->oldcmd = cli->cmd;
+        cli->oldlen = cli->len;
+
         return PROC_PRE_CONT;
     }
     else
@@ -711,7 +713,6 @@ static int _proc_tab(struct cli* cli, unsigned char* c)
         for (i=0; i<str_array->num; i++)
         {
             ret = _match_cmd(sub_cmds, (char*)str_array->datas[i], &matches);
-            derror("i = %d, ret = %d", i, ret);
             if (ret == CLI_FULL_MATCH)
             {
                 struct cli_cmd* cmd = (struct cli_cmd*)matches->datas[0];
@@ -734,21 +735,45 @@ static int _proc_tab(struct cli* cli, unsigned char* c)
             {
                 strcat(newcmd, (char*)str_array->datas[i]);
                 array_release(matches);
+
+                cli->lastchar = CTRL('I');
                 break;
             }
             else //(ret == CLI_NO_MATCH)
             {
                 strcat(newcmd, (char*)str_array->datas[i]);
                 array_release(matches);
+
+                cli->lastchar = CTRL('I');
                 break;
             }
         }
+
+        if ((cli->cmd[cli->len-1] == ' ') || (cli->cmd[cli->len-1] == '\t'))
+        {
+            if (sub_cmds->num == 1)
+            {
+                struct cli_cmd* cmd = (struct cli_cmd*)sub_cmds->datas[0];
+                if (cmd->type == CMD_TOKEN)
+                {
+                    strcat(newcmd, cmd->str);
+                    strcat(newcmd, " ");
+                }
+                else
+                {
+                    cli->lastchar = CTRL('I');
+                }
+            }
+            else
+            {
+                cli->lastchar = CTRL('I');
+            }
+        }
+
         array_release(str_array);
         _change_curr_cmd(cli, newcmd);
 
-        cli->lastchar = CTRL('I');
         cli->oldlen = cli->len;
-
         return PROC_CONT;
     }
 }
