@@ -16,7 +16,7 @@ int main(int argc, char const *argv[])
     int i;
     for (i=0; i<array->num; i++)
     {
-        dprint("array->datas[%d] = %d", i, (intptr_t)array->datas[i]);
+        dprint("array->datas[%d] = %ld", i, (intptr_t)array->datas[i]);
     }
 
     array_release(array);

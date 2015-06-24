@@ -1159,7 +1159,7 @@ static int _execute_cmd(struct cli* cli, int node_id, char* string)
     CHECK_IF(cli->fd <= 0, return CLI_FAIL, "cli fd = %d invalid", cli->fd);
 
     CHECK_IF(string == NULL, return CLI_FAIL, "string is null");
-    CHECK_IF(strlen(string) > CLI_MAX_CMD_SIZE, return CLI_FAIL, "string len = %d invalid", strlen(string));
+    CHECK_IF(strlen(string) > CLI_MAX_CMD_SIZE, return CLI_FAIL, "string len = %ld invalid", strlen(string));
 
     struct cli_node* node = _get_node(cli->nodes, node_id);
     CHECK_IF(node == NULL, return CLI_FAIL, "node with id = %d does not exist", node_id);
@@ -1224,22 +1224,9 @@ int cli_execute_cmd(struct cli* cli, char* string)
     return _execute_cmd(cli, cli->node_id, string);
 }
 
-int cli_process(struct cli* cli)
+static int _process(struct cli* cli, char c)
 {
-    CHECK_IF(cli == NULL, return CLI_FAIL, "cli is null");
-    CHECK_IF(cli->is_init != 1, return CLI_FAIL, "cli is not init yet");
-    CHECK_IF(cli->fd <= 0, return CLI_FAIL, "cli fd = %d invalid", cli->fd);
-
-    int ret     = -1;
-    int recvlen = -1;
-    unsigned char c;
-
-    recvlen = tcp_recv(&cli->tcp, &c, 1);
-    if (recvlen <= 0)
-    {
-        // tcp recv failed or connection closed
-        goto _ERROR;
-    }
+    int ret = -1;
 
     ret = _proc_option(cli, c);
     if (ret == PROC_CONT)
@@ -1371,6 +1358,29 @@ _ERROR:
     return CLI_FAIL;
 }
 
+int cli_process(struct cli* cli)
+{
+    CHECK_IF(cli == NULL, return CLI_FAIL, "cli is null");
+    CHECK_IF(cli->is_init != 1, return CLI_FAIL, "cli is not init yet");
+    CHECK_IF(cli->fd <= 0, return CLI_FAIL, "cli fd = %d invalid", cli->fd);
+
+    unsigned char buf[CLI_MAX_CMD_SIZE+1];
+
+    int recvlen = tcp_recv(&cli->tcp, buf, CLI_MAX_CMD_SIZE+1);
+    CHECK_IF(recvlen <= 0, return CLI_FAIL, "tcp_recv failed");
+
+    dprint("recvlen = %d", recvlen);
+
+    int i;
+    int ret;
+    for (i=0; i<recvlen; i++)
+    {
+        ret = _process(cli, buf[i]);
+        CHECK_IF(ret != CLI_OK, return ret, "_process failed");
+    }
+
+    return CLI_OK;
+}
 
 int cli_server_regular_func(struct cli_server* server, cli_func regular)
 {
