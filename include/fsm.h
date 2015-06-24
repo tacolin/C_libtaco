@@ -45,8 +45,6 @@ struct fsm
     struct fsmst* prev;
     struct fqueue* evqueue;
     void* db;
-
-    struct fsmst* state_array;
 };
 
 int fsm_init(struct fsm* fsm, struct fsmst* state_array, char* init_st_name, void* db);

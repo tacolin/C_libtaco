@@ -71,7 +71,6 @@ int fsm_init(struct fsm* fsm, struct fsmst* state_array, char* init_st_name, voi
     fsm->prev        = NULL;
     fsm->busy        = false;
     fsm->db          = db;
-    fsm->state_array = state_array;
     fsm->evqueue     = fqueue_create(_clean_fsmev);
     CHECK_IF(fsm->evqueue == NULL, return FSM_FAIL, "fqueue_create failed");
 
@@ -88,7 +87,6 @@ void fsm_uninit(struct fsm* fsm)
     fsm->curr        = NULL;
     fsm->prev        = NULL;
     fsm->evqueue     = NULL;
-    fsm->state_array = NULL;
     fsm->busy        = false;
     return;
 }
