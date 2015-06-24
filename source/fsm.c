@@ -19,16 +19,60 @@ static void _clean_fsmev(void* input)
     if (input) free(input);
 }
 
-int fsm_init(struct fsm* fsm, struct fsmst* init_st, void* db)
+static struct fsmst* _find_state(struct fsmst* state_array, char* name)
+{
+    CHECK_IF(state_array == NULL, return NULL, "state_array is null");
+    CHECK_IF(name == NULL, return NULL, "name is null");
+
+    int i;
+    struct fsmst* state;
+    for (i=0, state = &state_array[i]; state->name != NULL; i++, state = &state_array[i])
+    {
+        if (0 == strcmp(name, state->name))
+        {
+            return state;
+        }
+    }
+    return NULL;
+}
+
+static int _complete_all_trans(struct fsmst* state_array)
+{
+    CHECK_IF(state_array == NULL, return FSM_FAIL, "state_array is null");
+
+    int i;
+    struct fsmst* state;
+    for (i=0, state = &state_array[i]; state->name != NULL; i++, state = &state_array[i])
+    {
+        int j;
+        struct fsmtrans* trans;
+        for (j=0, trans = &state->trans_array[j]; trans->ev_type > 0; j++, trans = &state->trans_array[j])
+        {
+            trans->next_st = _find_state(state_array, trans->next_st_name);
+            CHECK_IF(trans->next_st == NULL, return FSM_FAIL, "_find_state failed with name = %s", trans->next_st_name);
+        }
+    }
+    return FSM_OK;
+}
+
+int fsm_init(struct fsm* fsm, struct fsmst* state_array, char* init_st_name, void* db)
 {
     CHECK_IF(fsm == NULL, return FSM_FAIL, "fsm is null");
-    CHECK_IF(init_st == NULL, return FSM_FAIL, "init_st is null");
+    CHECK_IF(state_array == NULL, return FSM_FAIL, "state_array is null");
+    CHECK_IF(init_st_name == NULL, return FSM_FAIL, "init_st_name is null");
 
-    fsm->curr    = init_st;
-    fsm->prev    = NULL;
-    fsm->busy    = false;
-    fsm->db      = db;
-    fsm->evqueue = fqueue_create(_clean_fsmev);
+    struct fsmst* init_st = _find_state(state_array, init_st_name);
+    CHECK_IF(init_st == NULL, return FSM_FAIL, "find no init_st with name = %s", init_st_name);
+
+    int chk = _complete_all_trans(state_array);
+    CHECK_IF(chk != FSM_OK, return FSM_FAIL, "_complete_all_trans failed");
+
+    fsm->curr        = init_st;
+    fsm->prev        = NULL;
+    fsm->busy        = false;
+    fsm->db          = db;
+    fsm->state_array = state_array;
+    fsm->evqueue     = fqueue_create(_clean_fsmev);
     CHECK_IF(fsm->evqueue == NULL, return FSM_FAIL, "fqueue_create failed");
 
     if (init_st->entryfn) init_st->entryfn(fsm, db, init_st);
@@ -41,10 +85,11 @@ void fsm_uninit(struct fsm* fsm)
     CHECK_IF(fsm == NULL, return, "fsm is null");
 
     fqueue_release(fsm->evqueue);
-    fsm->curr    = NULL;
-    fsm->prev    = NULL;
-    fsm->evqueue = NULL;
-    fsm->busy    = false;
+    fsm->curr        = NULL;
+    fsm->prev        = NULL;
+    fsm->evqueue     = NULL;
+    fsm->state_array = NULL;
+    fsm->busy        = false;
     return;
 }
 

@@ -7,6 +7,9 @@
 #define FSM_OK (0)
 #define FSM_FAIL (-1)
 
+#define FSM_STATE_END {NULL}
+#define FSM_TRANS_END {-1}
+
 struct fsmev
 {
     int type;
@@ -22,6 +25,8 @@ struct fsmtrans
     void (*action)(struct fsm* fsm, void* db, struct fsmev* ev);
     int (*guard)(struct fsm* fsm, void* db, struct fsmev* ev);
     int guard_val;
+    char* next_st_name;
+
     struct fsmst* next_st;
 };
 
@@ -40,9 +45,11 @@ struct fsm
     struct fsmst* prev;
     struct fqueue* evqueue;
     void* db;
+
+    struct fsmst* state_array;
 };
 
-int fsm_init(struct fsm* fsm, struct fsmst* init_st, void* db);
+int fsm_init(struct fsm* fsm, struct fsmst* state_array, char* init_st_name, void* db);
 void fsm_uninit(struct fsm* fsm);
 
 int fsm_sendev(struct fsm* fsm, struct fsmev* ev);

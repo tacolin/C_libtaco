@@ -76,7 +76,6 @@ static void _goto_s2(struct fsm* fsm, void* db, struct fsmst* st)
     fsm_sendev(fsm, &new_ev);
 }
 
-static struct fsmst _states[];
 static struct fsmst _states[] = {
     {
         .name = "s1",
@@ -84,8 +83,8 @@ static struct fsmst _states[] = {
         .exitfn  = _exit_st,
         .trans_array = (struct fsmtrans [])
         {
-            {(int)'a', _action, 0, 0, &_states[1]},
-            {-1} // end
+            {(int)'a', _action, 0, 0, "s2"},
+            FSM_TRANS_END
         },
     },
 
@@ -95,9 +94,9 @@ static struct fsmst _states[] = {
         .exitfn  = _exit_st,
         .trans_array = (struct fsmtrans [])
         {
-            {(int)'b', _action, _guard, (int)true, &_states[2]},
-            {(int)'b', _action, _guard, (int)false, &_states[3]},
-            {-1} // end
+            {(int)'b', _action, _guard, (int)true, "s3"},
+            {(int)'b', _action, _guard, (int)false, "s4"},
+            FSM_TRANS_END
         },
     },
 
@@ -107,8 +106,8 @@ static struct fsmst _states[] = {
         .exitfn  = _exit_st,
         .trans_array = (struct fsmtrans [])
         {
-            {(int)'c', _action, 0, 0,  &_states[2]},
-            {-1} // end
+            {(int)'c', _action, 0, 0, "s3"},
+            FSM_TRANS_END
         },
     },
 
@@ -118,8 +117,8 @@ static struct fsmst _states[] = {
         .exitfn  = _exit_st,
         .trans_array = (struct fsmtrans [])
         {
-            {(int)'d', 0, 0, 0,  &_states[4]},
-            {-1} // end
+            {(int)'d', 0, 0, 0, "s5"},
+            FSM_TRANS_END
         },
     },
 
@@ -128,17 +127,19 @@ static struct fsmst _states[] = {
         .entryfn = _goto_s2,
         .trans_array = (struct fsmtrans [])
         {
-            {(int)'d', _action, 0, 0,  &_states[1]},
-            {-1} // end
+            {(int)'d', _action, 0, 0, "s2"},
+            FSM_TRANS_END
         },
     },
+
+    FSM_STATE_END
 };
 
 int main(int argc, char const *argv[])
 {
     struct taco taco_db = {.data = 100};
     struct fsm fsm;
-    fsm_init(&fsm, &_states[0], &taco_db);
+    fsm_init(&fsm, _states, "s1", &taco_db);
     dprint("curr = %s", fsm_curr(&fsm)->name);
 
     struct fsmev ev;
