@@ -37,6 +37,75 @@ static void _clean_msg(void* input)
     if (input) free(input);
 }
 
+int logger_unset_udp(struct logger* logger)
+{
+    CHECK_IF(logger == NULL, return LOG_FAIL, "logger is null");
+    logger->flag &= ~LOG_FLAG_UDP;
+    udp_uninit(&logger->udp);
+    return LOG_OK;
+}
+
+int logger_set_udp(struct logger* logger, char* dstip, int dstport)
+{
+    CHECK_IF(logger == NULL, return LOG_FAIL, "logger is null");
+    CHECK_IF(dstip == NULL, return LOG_FAIL, "dstip is null");
+    CHECK_IF(dstport <= 0, return LOG_FAIL, "dstport = %d invalid", dstport);
+
+    if (logger->udp.is_init)
+    {
+        logger_unset_udp(logger);
+    }
+
+    udp_init(&logger->udp, NULL, UDP_PORT_ANY);
+    snprintf(logger->remote.ipv4, INET_ADDRSTRLEN, "%s", dstip);
+    logger->remote.port = dstport;
+    logger->flag |= LOG_FLAG_UDP;
+    return LOG_OK;
+}
+
+int logger_unset_file(struct logger* logger)
+{
+    CHECK_IF(logger == NULL, return LOG_FAIL, "logger is null");
+    logger->flag &= ~LOG_FLAG_FILE;
+    close(logger->fd);
+    logger->fd = -1;
+    return LOG_OK;
+}
+
+int logger_set_file(struct logger* logger, char* filepath)
+{
+    CHECK_IF(logger == NULL, return LOG_FAIL, "logger is null");
+    CHECK_IF(filepath == NULL, return LOG_FAIL, "filepath is null");
+
+    if (logger->fd > 0)
+    {
+        logger_unset_file(logger);
+    }
+
+    unlink(filepath);
+
+    logger->fd = open(filepath, O_RDWR | O_CREAT, 0755);
+    CHECK_IF(logger->fd <= 0, return LOG_FAIL, "open failed");
+
+    logger->flag |= LOG_FLAG_FILE;
+    return LOG_OK;
+}
+
+int logger_unset_stdout(struct logger* logger)
+{
+    CHECK_IF(logger == NULL, return LOG_FAIL, "logger is null");
+    logger->flag &= ~LOG_FLAG_STDOUT;
+    return LOG_OK;
+}
+
+int logger_set_stdout(struct logger* logger)
+{
+    CHECK_IF(logger == NULL, return LOG_FAIL, "logger is null");    
+    logger->flag |= LOG_FLAG_STDOUT;
+    return LOG_OK;
+}
+
+
 struct logger* logger_create(int flag, char* dstip, int dstport, char* filepath)
 {
     struct logger* lg = calloc(sizeof(struct logger), 1);
@@ -47,18 +116,14 @@ struct logger* logger_create(int flag, char* dstip, int dstport, char* filepath)
 
     if (flag & LOG_FLAG_UDP)
     {
-        CHECK_IF(dstip == NULL, goto _ERROR, "dstip is null");
-        CHECK_IF(dstport <= 0, goto _ERROR, "dstport = %d invalid", dstport);
-
-        udp_init(&lg->udp, NULL, UDP_PORT_ANY);
-        snprintf(lg->remote.ipv4, INET_ADDRSTRLEN, "%s", dstip);
-        lg->remote.port = dstport;
+        int chk = logger_set_udp(lg, dstip, dstport);
+        CHECK_IF(chk != LOG_OK, goto _ERROR, "logger_set_udp failed");
     }
 
     if (flag & LOG_FLAG_FILE)
     {
-        CHECK_IF(filepath == NULL, goto _ERROR, "filepath is null");
-        lg->fd = open(filepath, O_RDWR | O_CREAT, 0755);
+        int chk = logger_set_file(lg, filepath);
+        CHECK_IF(chk != LOG_OK, goto _ERROR, "logger_set_file failed");
     }
     return lg;
 
@@ -75,9 +140,9 @@ void logger_release(struct logger* lg)
 
     if (lg->running) logger_break(lg);
 
-    if (lg->flag & LOG_FLAG_UDP) udp_uninit(&lg->udp);
+    if (lg->flag & LOG_FLAG_UDP) logger_unset_udp(lg);
 
-    if (lg->flag & LOG_FLAG_FILE) close(lg->fd);
+    if (lg->flag & LOG_FLAG_FILE) logger_unset_file(lg);
 
     free(lg);
 }

@@ -6,6 +6,9 @@
 #include "udp.h"
 #include "queue.h"
 
+#define LOG_OK (0)
+#define LOG_FAIL (-1)
+
 #define LOG_LV_DEFAULT LOG_LV_INFO
 
 #define log_print(logger, level, msg, param...)\
@@ -66,6 +69,11 @@ void logger_setlevel(struct logger* lg, int lv);
 int logger_getlevel(struct logger* lg);
 
 void logger_enq(struct logger* lg, char* str);
-// void logger_handlemsg(struct logger* lg, char* msg);
+
+int logger_set_udp(struct logger* logger, char* dstip, int dstport);
+int logger_unset_udp(struct logger* logger);
+
+int logger_set_file(struct logger* logger, char* filepath);
+int logger_unset_file(struct logger* logger);
 
 #endif //_LOGGER_H_

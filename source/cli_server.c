@@ -1159,7 +1159,7 @@ static int _execute_cmd(struct cli* cli, int node_id, char* string)
     CHECK_IF(cli->fd <= 0, return CLI_FAIL, "cli fd = %d invalid", cli->fd);
 
     CHECK_IF(string == NULL, return CLI_FAIL, "string is null");
-    CHECK_IF(strlen(string) > CLI_MAX_CMD_SIZE, return CLI_FAIL, "string len = %ld invalid", strlen(string));
+    CHECK_IF(strlen(string) > CLI_MAX_CMD_SIZE, return CLI_FAIL, "string len = %zd invalid", strlen(string));
 
     struct cli_node* node = _get_node(cli->nodes, node_id);
     CHECK_IF(node == NULL, return CLI_FAIL, "node with id = %d does not exist", node_id);
