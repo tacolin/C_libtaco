@@ -36,6 +36,8 @@ int main(int argc, char const *argv[])
     logger_set_file(lg, "taco.txt");
     logger_set_stdout(lg);
 
+    logger_set_level(lg, LOG_LV_V1);
+
     struct thread t[2] = {
         {_logger, lg},
         {_printer, lg}

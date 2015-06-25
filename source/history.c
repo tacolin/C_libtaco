@@ -131,7 +131,7 @@ void* history_get(struct history* h, int idx)
     return h->data_array[idx];
 }
 
-int history_do(struct history* h, int start, int end, void (*execfn)(int idx, void* data))
+int history_do(struct history* h, int start, int end, void (*execfn)(int idx, void* data, void* arg), void* arg)
 {
     CHECK_IF(h == NULL, return HIS_FAIL, "h is null");
     CHECK_IF(execfn == NULL, return HIS_FAIL, "execfn is null");
@@ -144,16 +144,16 @@ int history_do(struct history* h, int start, int end, void (*execfn)(int idx, vo
     int i;
     for (i=start; i<end; i++)
     {
-        execfn(i, h->data_array[i]);
+        execfn(i, h->data_array[i], arg);
     }
 
     UNLOCK(h);
     return HIS_OK;
 }
 
-int history_do_all(struct history* h, void (*execfn)(int idx, void* data))
+int history_do_all(struct history* h, void (*execfn)(int idx, void* data, void* arg), void* arg)
 {
-    return history_do(h, 0, h->num, execfn);
+    return history_do(h, 0, h->num, execfn, arg);
 }
 
 int history_clear(struct history* h)

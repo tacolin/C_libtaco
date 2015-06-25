@@ -55,6 +55,32 @@ DEFUN(_input_id,
     return CLI_OK;
 }
 
+DEFUN(_write_file,
+      _write_file_cmd,
+      "write FILEPATH",
+      "this is save",
+      "this is filepath")
+{
+    cli_print(cli, "filepath = %s", argv[0]);
+
+    cli_save_histories(cli, argv[0]);
+    
+    return CLI_OK;
+}
+
+DEFUN(_read_file, 
+      _read_file_cmd,
+      "read FILEPATH",
+      "this is read",
+      "This is filepath")
+{
+    cli_print(cli, "filepath = %s", argv[0]);
+
+    cli_read_file(cli, argv[0]);
+
+    return CLI_OK;
+}
+
 int main(int argc, char const *argv[])
 {
     signal(SIGINT, _sigIntHandler);
@@ -76,6 +102,8 @@ int main(int argc, char const *argv[])
     cli_server_install_cmd(&server, 100, &_show_me_the_money_cmd);
     cli_server_install_cmd(&server, 100, &_show_me_the_cash_cmd);
     cli_server_install_cmd(&server, 100, &_input_id_cmd);
+    cli_server_install_cmd(&server, 100, &_write_file_cmd);
+    cli_server_install_cmd(&server, 100, &_read_file_cmd);
 
     fd_set readset;
     int select_ret;

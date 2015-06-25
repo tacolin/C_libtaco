@@ -1,7 +1,7 @@
 #include "basic.h"
 #include "history.h"
 
-static void _print_str(int idx, void* data)
+static void _print_str(int idx, void* data, void* arg)
 {
     dprint("[%d] : %s", idx, (char*)data);
 }
@@ -11,7 +11,7 @@ struct taco
     int num;
 };
 
-static void _print_taco(int idx, void* data)
+static void _print_taco(int idx, void* data, void* arg)
 {
     struct taco* t = (struct taco*)data;
     dprint("[%d] : num = %d", idx, t->num);
@@ -38,13 +38,13 @@ int main(int argc, char const *argv[])
     history_addstr(h, "test 15");
     history_addstr(h, "test 166666666666666666666666666666666666666666666666666666");
 
-    history_do_all(h, _print_str);
+    history_do_all(h, _print_str, NULL);
     dprint("===");
-    history_do(h, 1, 3, _print_str);
+    history_do(h, 1, 3, _print_str, NULL);
     dprint("===");
-    history_do(h, 10, 10, _print_str);
+    history_do(h, 10, 10, _print_str, NULL);
     dprint("===");
-    history_do(h, 6, 8, _print_str);
+    history_do(h, 6, 8, _print_str, NULL);
 
     history_release(h);
 
@@ -58,7 +58,7 @@ int main(int argc, char const *argv[])
         history_add(h, &t, sizeof(struct taco));
     }
 
-    history_do_all(h, _print_taco);
+    history_do_all(h, _print_taco, NULL);
 
     history_release(h);
 

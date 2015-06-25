@@ -194,15 +194,11 @@ static void _pre_process(struct cli* cli)
 {
     _show_prompt(cli);
 
-    if (cli->oldcmd != NULL)
+    if ((cli->oldcmd != NULL) && (cli->oldlen > 0))
     {
         cli_send(cli, cli->oldcmd, cli->oldlen);
-
         cli->len    = cli->oldlen;
         cli->cursor = cli->oldlen;
-        cli->pre    = 1;
-        cli->oldcmd = NULL;
-        cli->oldlen = 0;
     }
     else
     {
@@ -210,8 +206,8 @@ static void _pre_process(struct cli* cli)
         cli->len    = 0;
         cli->cursor = 0;
     }
-
-    cli->pre = 0;
+    cli->oldcmd = NULL;
+    cli->oldlen = 0;
     return;
 }
 
@@ -238,7 +234,6 @@ int cli_server_accept(struct cli_server* server, struct cli* cli)
     CHECK_IF(chk != TCP_OK, return CLI_FAIL, "tcp_server_accept failed");
 
     cli->history     = history_create(CLI_MAX_CMD_SIZE+1, CLI_MAX_CMD_HISTORY_NUM);
-    cli->pre         = 1;
     cli->insert_mode = 1;
     cli->fd          = cli->tcp.fd;
     cli->banner      = server->banner;
@@ -270,7 +265,7 @@ int cli_server_accept(struct cli_server* server, struct cli* cli)
     return CLI_OK;
 }
 
-static void _print_history(int idx, void* data)
+static void _print_history(int idx, void* data, void* arg)
 {
     dprint("[%d] : %s", idx, (char*)data);
 }
@@ -285,7 +280,7 @@ int cli_uninit(struct cli* cli)
 
     if (cli->history)
     {
-        history_do_all(cli->history, _print_history);
+        history_do_all(cli->history, _print_history, NULL);
         history_release(cli->history);
         cli->history = NULL;
     }
@@ -658,7 +653,7 @@ _END:
 }
 
 static int _proc_tab(struct cli* cli, unsigned char* c)
-{
+{   
     if (cli->cursor != cli->len)
     {
         return PROC_CONT;
@@ -682,19 +677,29 @@ static int _proc_tab(struct cli* cli, unsigned char* c)
         for (i=0; i<str_array->num; i++)
         {
             struct cli_cmd* cmd = (struct cli_cmd*)array_find(sub_cmds, _compare_cmd_str, (char*)str_array->datas[i]);
-            sub_cmds = cmd->sub_cmds;
+            if (cmd)
+            {
+                sub_cmds = cmd->sub_cmds;
+            }
+            else
+            {
+                cli->lastchar == ' ';
+                return PROC_CONT;
+            }
         }
 
-        for (i=0; i<sub_cmds->num; i++)
+        for (i=0; sub_cmds && i<sub_cmds->num; i++)
         {
             if ((i % 4) == 0)
             {
                 cli_send(cli, "\r\n", 2);
             }
 
+            derror("1");
             struct cli_cmd* cmd = (struct cli_cmd*)sub_cmds->datas[i];
             cli_send(cli, cmd->str, strlen(cmd->str)+1);
             cli_send(cli, "\t", 1);
+            derror("2");
         }
 
         cli_send(cli, "\r\n", 2);
@@ -706,6 +711,8 @@ static int _proc_tab(struct cli* cli, unsigned char* c)
 
         cli->oldcmd = cli->cmd;
         cli->oldlen = cli->len;
+
+        derror("3");
 
         return PROC_PRE_CONT;
     }
@@ -748,7 +755,6 @@ static int _proc_tab(struct cli* cli, unsigned char* c)
                 strcat(newcmd, (char*)str_array->datas[i]);
                 array_release(matches);
 
-                cli->lastchar = CTRL('I');
                 break;
             }
         }
@@ -1766,6 +1772,59 @@ int cli_change_node(struct cli* cli, int node_id)
     free(cli->prompt);
     cli->prompt = strdup(node->prompt);
 
+    return CLI_OK;
+}
+
+static void _save_to_file(int idx, void* data, void* arg)
+{
+    FILE* fp = (FILE*)arg;
+    fprintf(fp, "%s\n", (char*)data);
+    derror("here %d", idx);
+    return;
+}
+
+int cli_save_histories(struct cli* cli, char* filepath)
+{
+    CHECK_IF(cli == NULL, return CLI_FAIL, "cli is null");
+    CHECK_IF(cli->is_init != 1, return CLI_FAIL, "cli is not init yet");
+    CHECK_IF(cli->fd <= 0, return CLI_FAIL, "cli fd = %d invalid", cli->fd);
+    CHECK_IF(filepath == NULL, return CLI_FAIL, "filepath is null");
+
+    unlink(filepath);
+
+    FILE* fp = fopen(filepath, "w+");
+    CHECK_IF(fp == NULL, return CLI_FAIL, "fopen failed");
+
+    int chk = history_do_all(cli->history, _save_to_file, fp);
+    CHECK_IF(chk != HIS_OK, goto _ERROR, "history_do_all failed");
+
+    fclose(fp);
+    return CLI_OK;
+
+_ERROR:
+    fclose(fp);
+    return CLI_FAIL;
+}
+
+int cli_read_file(struct cli* cli, char* filepath)
+{
+    CHECK_IF(cli == NULL, return CLI_FAIL, "cli is null");
+    CHECK_IF(cli->is_init != 1, return CLI_FAIL, "cli is not init yet");
+    CHECK_IF(cli->fd <= 0, return CLI_FAIL, "cli fd = %d invalid", cli->fd);
+    CHECK_IF(filepath == NULL, return CLI_FAIL, "filepath is null");
+
+    FILE* fp = fopen(filepath, "r");
+    CHECK_IF(fp == NULL, return CLI_FAIL, "fopen failed");
+
+    char buf[CLI_MAX_CMD_SIZE+1];
+    int chk;
+    while (fgets(buf, CLI_MAX_CMD_SIZE+1, fp) != NULL)
+    {
+        chk = cli_execute_cmd(cli, buf);
+        CHECK_IF(chk != CLI_OK, break, "cli_execute_cmd failed : %s", buf);
+    }
+
+    fclose(fp);
     return CLI_OK;
 }
 

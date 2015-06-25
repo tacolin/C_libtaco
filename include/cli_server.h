@@ -43,7 +43,6 @@ struct cli
 
     int is_option;
     int esc;
-    int pre;
     int insert_mode;
     int is_delete;
     int in_history;
@@ -109,6 +108,8 @@ int cli_process(struct cli* cli);
 int cli_change_node(struct cli* cli, int node_id);
 
 int cli_execute_cmd(struct cli* cli, char* string);
+
+int cli_save_histories(struct cli* cli, char* filepath);
 
 ////////////////////////////////////////////////////////////////////////////////
 
