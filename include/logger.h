@@ -13,7 +13,7 @@
 
 #define log_print(logger, level, msg, param...)\
 {\
-    if (logger_getlevel(logger) >= level)\
+    if (logger_get_level(logger) >= level)\
     {\
         struct timeval __tv;\
         char* __tmp;\
@@ -25,7 +25,7 @@
 
 // #define log_print(logger, level, msg, param...)\
 // {\
-//     if (logger_getlevel(logger) >= level)\
+//     if (logger_get_level(logger) >= level)\
 //     {\
 //         struct timeval __tv;\
 //         char* __tmp;\
@@ -59,14 +59,14 @@ enum
 
 struct logger;
 
-struct logger* logger_create(int flag, char* dstip, int dstport, char* filepath);
+struct logger* logger_create(void);
 void logger_release(struct logger* lg);
 
 void logger_run(struct logger* lg);
 void logger_break(struct logger* lg);
 
-void logger_setlevel(struct logger* lg, int lv);
-int logger_getlevel(struct logger* lg);
+void logger_set_level(struct logger* lg, int lv);
+int logger_get_level(struct logger* lg);
 
 void logger_enq(struct logger* lg, char* str);
 

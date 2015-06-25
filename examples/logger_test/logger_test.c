@@ -19,23 +19,18 @@ static void _printer(void* arg)
         log_print(lg, LOG_LV_V1,   "hello world V1 %d\n", i);
         sleep(1);
 
-        if (i == 3)
-        {
-            logger_unset_file(lg);
-        }
+        if (i == 3) logger_unset_file(lg);
 
-        if (i == 3)
-        {
-            logger_unset_udp(lg);
-        }
+        if (i == 5) logger_unset_udp(lg);
+
+        if (i == 7) logger_unset_stdout(lg);
     }
     logger_break(lg);
 }
 
 int main(int argc, char const *argv[])
 {
-//    struct logger* lg = logger_create(LOG_FLAG_UDP | LOG_FLAG_FILE | LOG_FLAG_STDOUT, "127.0.0.1", 55555, "taco.txt");
-    struct logger* lg = logger_create(0, NULL, 0, NULL);
+    struct logger* lg = logger_create();
 
     logger_set_udp(lg, "127.0.0.1", 55555);
     logger_set_file(lg, "taco.txt");

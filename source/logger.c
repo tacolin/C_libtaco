@@ -106,30 +106,12 @@ int logger_set_stdout(struct logger* logger)
 }
 
 
-struct logger* logger_create(int flag, char* dstip, int dstport, char* filepath)
+struct logger* logger_create(void)
 {
     struct logger* lg = calloc(sizeof(struct logger), 1);
-
-    lg->flag  = flag;
     lg->level = LOG_LV_DEFAULT;
     queue_init(&lg->mq, -1, _clean_msg, QUEUE_FLAG_POP_BLOCK);
-
-    if (flag & LOG_FLAG_UDP)
-    {
-        int chk = logger_set_udp(lg, dstip, dstport);
-        CHECK_IF(chk != LOG_OK, goto _ERROR, "logger_set_udp failed");
-    }
-
-    if (flag & LOG_FLAG_FILE)
-    {
-        int chk = logger_set_file(lg, filepath);
-        CHECK_IF(chk != LOG_OK, goto _ERROR, "logger_set_file failed");
-    }
     return lg;
-
-_ERROR:
-    if (lg) logger_release(lg);
-    return NULL;
 }
 
 void logger_release(struct logger* lg)
@@ -189,13 +171,13 @@ void logger_break(struct logger* lg)
     return;
 }
 
-void logger_setlevel(struct logger* lg, int level)
+void logger_set_level(struct logger* lg, int level)
 {
     CHECK_IF(lg == NULL, return, "lg is null");
     lg->level = level;
 }
 
-int logger_getlevel(struct logger* lg)
+int logger_get_level(struct logger* lg)
 {
     CHECK_IF(lg == NULL, return LOG_LV_INVALID, "lg is null");
     return lg->level;
