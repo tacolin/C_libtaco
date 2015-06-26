@@ -35,10 +35,8 @@ void array_release(struct array* array)
         for (i=0; i<array->num; i++) array->cleanfn(array->datas[i]);
     }
 
-    if (array->datas)
-    {
-        free(array->datas);
-    }
+    if (array->datas) free(array->datas);
+
     free(array);
     return;
 }

@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include <errno.h>
 
-#include "cli_server.h"
+#include "cli.h"
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -265,11 +265,6 @@ int cli_server_accept(struct cli_server* server, struct cli* cli)
     return CLI_OK;
 }
 
-static void _print_history(int idx, void* data, void* arg)
-{
-    dprint("[%d] : %s", idx, (char*)data);
-}
-
 int cli_uninit(struct cli* cli)
 {
     CHECK_IF(cli == NULL, return CLI_FAIL, "cli is null");
@@ -280,7 +275,6 @@ int cli_uninit(struct cli* cli)
 
     if (cli->history)
     {
-        history_do_all(cli->history, _print_history, NULL);
         history_release(cli->history);
         cli->history = NULL;
     }
@@ -653,7 +647,7 @@ _END:
 }
 
 static int _proc_tab(struct cli* cli, unsigned char* c)
-{   
+{
     if (cli->cursor != cli->len)
     {
         return PROC_CONT;
@@ -1276,7 +1270,6 @@ static int _process(struct cli* cli, char c)
             if (!_is_empty_string(cli->cmd))
             {
                 history_addstr(cli->history, cli->cmd);
-                dprint("save history : %s", cli->cmd);
             }
             cli->history_idx = history_num(cli->history);
         }
@@ -1375,16 +1368,12 @@ int cli_process(struct cli* cli)
     int recvlen = tcp_recv(&cli->tcp, buf, CLI_MAX_CMD_SIZE+1);
     CHECK_IF(recvlen <= 0, return CLI_FAIL, "tcp_recv failed");
 
-    dprint("recvlen = %d", recvlen);
-
-    int i;
-    int ret;
+    int i, ret;
     for (i=0; i<recvlen; i++)
     {
         ret = _process(cli, buf[i]);
-        CHECK_IF(ret != CLI_OK, return ret, "_process failed");
+        if (ret != CLI_OK) return ret;
     }
-
     return CLI_OK;
 }
 

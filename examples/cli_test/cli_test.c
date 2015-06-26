@@ -3,7 +3,7 @@
 #include <sys/select.h>
 
 #include "basic.h"
-#include "cli_server.h"
+#include "cli.h"
 
 static int _running = 1;
 
@@ -64,11 +64,11 @@ DEFUN(_write_file,
     cli_print(cli, "filepath = %s", argv[0]);
 
     cli_save_histories(cli, argv[0]);
-    
+
     return CLI_OK;
 }
 
-DEFUN(_read_file, 
+DEFUN(_read_file,
       _read_file_cmd,
       "read FILEPATH",
       "this is read",
