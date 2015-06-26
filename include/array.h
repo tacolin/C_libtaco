@@ -10,6 +10,7 @@ struct array
     int num;
 
     void (*cleanfn)(void* data);
+    int capacity;
 };
 
 struct array* array_create(void (*cleanfn)(void* data));

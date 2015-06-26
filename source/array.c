@@ -13,12 +13,15 @@
     }\
 }
 
+#define ARRAY_DEFAULT_CAPACITY (16)
+
 struct array* array_create(void (*cleanfn)(void* data))
 {
     struct array* array = calloc(sizeof(*array), 1);
-    array->num     = 0;
-    array->datas   = NULL;
-    array->cleanfn = cleanfn;
+    array->num          = 0;
+    array->datas        = calloc(sizeof(void*), ARRAY_DEFAULT_CAPACITY);
+    array->capacity     = ARRAY_DEFAULT_CAPACITY;
+    array->cleanfn      = cleanfn;
     return array;
 }
 
@@ -46,8 +49,13 @@ int array_add(struct array* array, void* data)
     CHECK_IF(data == NULL, return ARRAY_FAIL, "data is null");
 
     array->num++;
-    array->datas = realloc(array->datas, sizeof(void*) * array->num);
     array->datas[array->num-1] = data;
+
+    if (array->num > (array->capacity * 3 / 4))
+    {
+        array->datas = realloc(array->datas, sizeof(void*) * 2 * array->capacity);
+        array->capacity *= 2;
+    }
     return ARRAY_OK;
 }
 
