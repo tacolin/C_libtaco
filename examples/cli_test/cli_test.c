@@ -15,7 +15,6 @@ static void _sigIntHandler(int sig_num)
 
 static int _regular(struct cli* cli, int argc, char* argv[])
 {
-    cli_print(cli, "not found 1");
     cli_error(cli, "not found 2 : %s", argv[0]);
     return CLI_OK;
 }
@@ -52,6 +51,17 @@ DEFUN(_input_id,
       "this is id value")
 {
     cli_print(cli, "id value = %s", argv[0]);
+    return CLI_OK;
+}
+
+DEFUN(_input_ipv4,
+      _input_ipv4_cmd,
+      "input ip A.B.C.D",
+      "this is input",
+      "this is ip-token",
+      "this is ip-value")
+{
+    cli_print(cli, "ip value = %s", argv[0]);
     return CLI_OK;
 }
 
@@ -102,6 +112,7 @@ int main(int argc, char const *argv[])
     cli_server_install_cmd(&server, 100, &_show_me_the_money_cmd);
     cli_server_install_cmd(&server, 100, &_show_me_the_cash_cmd);
     cli_server_install_cmd(&server, 100, &_input_id_cmd);
+    cli_server_install_cmd(&server, 100, &_input_ipv4_cmd);
     cli_server_install_cmd(&server, 100, &_write_file_cmd);
     cli_server_install_cmd(&server, 100, &_read_file_cmd);
 

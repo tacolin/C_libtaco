@@ -667,50 +667,65 @@ static int _proc_tab(struct cli* cli, unsigned char* c)
     struct array* sub_cmds  = node->cmds;
     struct array* str_array = _string_to_array(cli->cmd, " \r\n\t");
     int ret = CLI_NO_MATCH;
+    struct array* matches = NULL;
+    int i;
 
     if (cli->lastchar == CTRL('I'))
     {
-        // double TAB
-        int i;
-        for (i=0; i<str_array->num; i++)
+        // double tab
+
+        if ((cli->cmd[cli->len-1] == ' ') || (cli->len == 0))
         {
-            struct cli_cmd* cmd = (struct cli_cmd*)array_find(sub_cmds, _compare_cmd_str, (char*)str_array->datas[i]);
-            if (cmd)
+            for (i=0; i<str_array->num; i++)
             {
+                struct cli_cmd* cmd = (struct cli_cmd*)array_find(sub_cmds, _compare_cmd_str, (char*)str_array->datas[i]);
                 sub_cmds = cmd->sub_cmds;
             }
-            else
+
+            matches = array_create(NULL);
+            for (i=0; i<sub_cmds->num; i++)
             {
-                cli->lastchar == ' ';
-                return PROC_CONT;
+                array_add(matches, sub_cmds->datas[i]);
+            }
+        }
+        else
+        {
+            for (i=0; i<str_array->num-1; i++)
+            {
+                struct cli_cmd* cmd = (struct cli_cmd*)array_find(sub_cmds, _compare_cmd_str, (char*)str_array->datas[i]);
+                sub_cmds = cmd->sub_cmds;
+            }
+
+            ret = _match_cmd(sub_cmds, (char*)str_array->datas[str_array->num-1], &matches);
+            if (ret != CLI_MULTI_MATCHES)
+            {
+                array_release(matches);
+                matches = NULL;
+                derror("it should be multi-matches ... ");
             }
         }
 
-        for (i=0; sub_cmds && i<sub_cmds->num; i++)
+        for (i=0; matches && i<matches->num; i++)
         {
             if ((i % 4) == 0)
             {
                 cli_send(cli, "\r\n", 2);
             }
-
-            derror("1");
-            struct cli_cmd* cmd = (struct cli_cmd*)sub_cmds->datas[i];
+            struct cli_cmd* cmd = (struct cli_cmd*)matches->datas[i];
             cli_send(cli, cmd->str, strlen(cmd->str)+1);
             cli_send(cli, "\t", 1);
-            derror("2");
         }
 
         cli_send(cli, "\r\n", 2);
         cli_send(cli, "\r\n", 2);
 
+        array_release(matches);
         array_release(str_array);
 
         cli->lastchar = ' ';
 
         cli->oldcmd = cli->cmd;
         cli->oldlen = cli->len;
-
-        derror("3");
 
         return PROC_PRE_CONT;
     }
