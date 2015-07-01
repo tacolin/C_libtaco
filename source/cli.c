@@ -233,7 +233,7 @@ int cli_server_accept(struct cli_server* server, struct cli* cli)
     int chk = tcp_server_accept(&server->tcp_server, &cli->tcp);
     CHECK_IF(chk != TCP_OK, return CLI_FAIL, "tcp_server_accept failed");
 
-    cli->history     = history_create(CLI_MAX_CMD_SIZE+1, CLI_MAX_CMD_HISTORY_NUM);
+    cli->history     = (struct history*)history_create(CLI_MAX_CMD_SIZE+1, CLI_MAX_CMD_HISTORY_NUM);
     cli->insert_mode = 1;
     cli->fd          = cli->tcp.fd;
     cli->banner      = server->banner;
@@ -406,12 +406,16 @@ static void _change_curr_cmd(struct cli* cli, char* newcmd)
         cli->len = strlen(cli->cmd);
         cli->cursor = strlen(cli->cmd);
     }
-    else // newcmd len <= currcmd len
+    else
     {
+        // newcmd len <= currcmd len
+
         for (i=strlen(newcmd); i<cli->len; i++)
         {
             cli_send(cli, "\b \b", 3);
         }
+
+        cli->len = strlen(newcmd);
 
         for (i=0; i<strlen(newcmd); i++)
         {
@@ -423,7 +427,7 @@ static void _change_curr_cmd(struct cli* cli, char* newcmd)
 
         int start = i;
 
-        for (i=start; i<cli->len-1; i++) // why cli->len-1 ? trial and error ...
+        for (i=start; i<cli->len; i++)
         {
             cli_send(cli, "\b", 1);
         }
