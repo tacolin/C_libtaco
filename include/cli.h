@@ -7,6 +7,7 @@
 
 #define CLI_OK (0)
 #define CLI_FAIL (-1)
+#define CLI_BREAK (-2)
 
 #define CLI_MAX_CMD_SIZE (100)
 #define CLI_MAX_CMD_HISTORY_NUM (10)

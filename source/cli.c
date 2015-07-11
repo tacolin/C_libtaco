@@ -80,6 +80,7 @@ struct cli_node
 struct cli_cmd
 {
     int type;
+    int alternative;
     char* str;
     char* desc;
     cli_func func;
@@ -496,8 +497,15 @@ static int _match_cmd(struct array* sub_cmds, char* cmd_str, struct array** matc
     struct cli_cmd* cmd = (struct cli_cmd*)array_find(sub_cmds, _compare_cmd_str, cmd_str);
     if (cmd != NULL)
     {
-        array_add(*matches, cmd);
-        return CLI_FULL_MATCH;
+        if (cmd->type == CMD_TOKEN)
+        {
+            array_add(*matches, cmd);
+            return CLI_FULL_MATCH;
+        }
+        else
+        {
+            return CLI_MULTI_MATCHES;
+        }
     }
     else
     {
@@ -1190,6 +1198,7 @@ static int _execute_cmd(struct cli* cli, int node_id, char* string)
     struct array* fit_cmds  = NULL;
     struct array* arguments = array_create(NULL);
     int i;
+    int ret = CLI_OK;
     bool running = true;
     for (i=0; i<str_array->num && running; i++)
     {
@@ -1197,7 +1206,7 @@ static int _execute_cmd(struct cli* cli, int node_id, char* string)
         if (fit_cmds->num == 1)
         {
             struct cli_cmd* c = (struct cli_cmd*)fit_cmds->datas[0];
-            if (c->type != CMD_TOKEN)
+            if ((c->type != CMD_TOKEN) || (c->alternative))
             {
                 array_add(arguments, str_array->datas[i]);
             }
@@ -1207,7 +1216,7 @@ static int _execute_cmd(struct cli* cli, int node_id, char* string)
                 if (c->func)
                 {
                     cli_send(cli, "\r\n", 2);
-                    c->func(cli, arguments->num, (char**)arguments->datas);
+                    ret = c->func(cli, arguments->num, (char**)arguments->datas);
                     running = false;
                 }
                 else
@@ -1235,7 +1244,7 @@ static int _execute_cmd(struct cli* cli, int node_id, char* string)
     }
     array_release(str_array);
     array_release(arguments);
-    return CLI_OK;
+    return ret;
 }
 
 int cli_execute_cmd(struct cli* cli, char* string)
@@ -1284,13 +1293,17 @@ static int _process(struct cli* cli, char c)
     {
         if (cli->state == CLI_ST_NORMAL)
         {
-            _execute_cmd(cli, cli->node_id, cli->cmd);
-
+            int exec_ret = _execute_cmd(cli, cli->node_id, cli->cmd);
             if (!_is_empty_string(cli->cmd))
             {
                 history_addstr(cli->history, cli->cmd);
             }
             cli->history_idx = history_num(cli->history);
+
+            if (exec_ret == CLI_BREAK)
+            {
+                goto _ERROR;
+            }
         }
         else if (cli->state == CLI_ST_LOGIN)
         {
@@ -1583,7 +1596,7 @@ static int _compare_str(void* data, void* arg)
     return (0 == strcmp(cmd->str, str)) ? 1 : 0;
 }
 
-static struct cli_cmd* _install_cmd_element(struct cli_server* server, struct cli_cmd* parent, char* string, cli_func func, int node_id, char* desc)
+static struct cli_cmd* _install_cmd_element(struct cli_server* server, struct cli_cmd* parent, char* string, cli_func func, int node_id, char* desc, int alternative)
 {
     CHECK_IF(string == NULL, return NULL, "string is null");
 
@@ -1613,14 +1626,15 @@ static struct cli_cmd* _install_cmd_element(struct cli_server* server, struct cl
         }
     }
 
-    c         = calloc(sizeof(*c), 1);
-    c->str    = pre_process_str;
-    c->type   = type;
-    c->desc   = (desc) ? strdup(desc) : strdup(" ") ;
-    c->func   = func;
-    c->lbound = lbound;
-    c->ubound = ubound;
-    c->sub_cmds = array_create(_clean_cmd);
+    c              = calloc(sizeof(*c), 1);
+    c->str         = pre_process_str;
+    c->alternative = alternative;
+    c->type        = type;
+    c->desc        = (desc) ? strdup(desc) : strdup(" ") ;
+    c->func        = func;
+    c->lbound      = lbound;
+    c->ubound      = ubound;
+    c->sub_cmds    = array_create(_clean_cmd);
 
     array_add(cmds, c);
     return c;
@@ -1657,7 +1671,7 @@ static int _install_wrapper(struct cli_server* server, struct cli_cmd* parent, s
             char* content = NULL;
             sscanf(str, "[%s]", content);
 
-            _install_cmd_element(server, parent, content, func, node_id, desc);
+            _install_cmd_element(server, parent, content, func, node_id, desc, 1);
             parent->func = func;
         }
         else if (IS_ALT_CMD(str))
@@ -1668,7 +1682,7 @@ static int _install_wrapper(struct cli_server* server, struct cli_cmd* parent, s
             for (i=0; i<content_array->num; i++)
             {
                 content = (char*)content_array->datas[i];
-                _install_cmd_element(server, parent, content, func, node_id, desc);
+                _install_cmd_element(server, parent, content, func, node_id, desc, 1);
             }
             array_release(content_array);
 
@@ -1679,7 +1693,7 @@ static int _install_wrapper(struct cli_server* server, struct cli_cmd* parent, s
         }
         else
         {
-            _install_cmd_element(server, parent, str, func, node_id, desc);
+            _install_cmd_element(server, parent, str, func, node_id, desc, 0);
         }
     }
     else
@@ -1690,7 +1704,7 @@ static int _install_wrapper(struct cli_server* server, struct cli_cmd* parent, s
             char* content = NULL;
             sscanf(str, "[%s]", content);
 
-            c = _install_cmd_element(server, parent, content, NULL, node_id, desc);
+            c = _install_cmd_element(server, parent, content, NULL, node_id, desc, 1);
             _install_wrapper(server, c, str_array, func, node_id, desc_array, idx+1);
             _install_wrapper(server, parent, str_array, func, node_id, desc_array, idx+1);
         }
@@ -1702,7 +1716,7 @@ static int _install_wrapper(struct cli_server* server, struct cli_cmd* parent, s
             for (i=0; i<content_array->num; i++)
             {
                 content = (char*)content_array->datas[i];
-                c = _install_cmd_element(server, parent, content, NULL, node_id, desc);
+                c = _install_cmd_element(server, parent, content, NULL, node_id, desc, 1);
                 _install_wrapper(server, c, str_array, func, node_id, desc_array, idx+1);
             }
             array_release(content_array);
@@ -1714,7 +1728,7 @@ static int _install_wrapper(struct cli_server* server, struct cli_cmd* parent, s
         }
         else
         {
-            c = _install_cmd_element(server, parent, str, NULL, node_id, desc);
+            c = _install_cmd_element(server, parent, str, NULL, node_id, desc, 0);
             _install_wrapper(server, c, str_array, func, node_id, desc_array, idx+1);
         }
     }
