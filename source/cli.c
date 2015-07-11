@@ -1206,9 +1206,13 @@ static int _execute_cmd(struct cli* cli, int node_id, char* string)
         if (fit_cmds->num == 1)
         {
             struct cli_cmd* c = (struct cli_cmd*)fit_cmds->datas[0];
-            if ((c->type != CMD_TOKEN) || (c->alternative))
+            if (c->type != CMD_TOKEN)
             {
                 array_add(arguments, str_array->datas[i]);
+            }
+            else if (c->alternative)
+            {
+                array_add(arguments, c->str);
             }
 
             if (i == str_array->num-1)
