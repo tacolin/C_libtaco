@@ -45,6 +45,8 @@ struct cli
     int is_option;
     int esc;
     int insert_mode;
+    int is_home;
+    int is_end;
     int is_delete;
     int in_history;
 

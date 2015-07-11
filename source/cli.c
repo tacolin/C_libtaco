@@ -848,6 +848,18 @@ static int _proc_ctrl(struct cli* cli, unsigned char *c)
                     *c = CTRL('B');
                     break;
 
+                case '1':
+                    dprint("home key");
+                    cli->is_home = 1;
+                    return PROC_CONT;
+                    // break;
+
+                case '4':
+                    dprint("end key");
+                    cli->is_end = 1;
+                    return PROC_CONT;
+                    // break;
+
                 case '3':
                     cli->is_delete = 1;
                     return PROC_CONT;
@@ -863,6 +875,30 @@ static int _proc_ctrl(struct cli* cli, unsigned char *c)
             cli->esc = (*c == '[') ? *c : 0;
             return PROC_CONT;
         }
+    }
+
+    if (cli->is_home)
+    {
+        if (cli->cursor > 0)
+        {
+            unsigned char backs[cli->cursor];
+            memset(backs, '\b', cli->cursor);
+            cli_send(cli, backs, cli->cursor);
+            cli->cursor = 0;
+        }
+        cli->is_home = 0;
+        return PROC_CONT;
+    }
+
+    if (cli->is_end)
+    {
+        if (cli->len > cli->cursor)
+        {
+            cli_send(cli, &cli->cmd[cli->cursor], cli->len - cli->cursor);
+            cli->cursor = cli->len;
+        }
+        cli->is_end = 0;
+        return PROC_CONT;
     }
 
     if (cli->is_delete)
