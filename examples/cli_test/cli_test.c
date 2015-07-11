@@ -195,7 +195,7 @@ DEFUN(_set_host_name,
 
 DEFUN(_set_total,
       _set_total_cmd,
-      "set dst port <1-65535> ipv4 A.B.C.D hostname NAME"
+      "set dst port <1-65535> ipv4 A.B.C.D hostname NAME",
       "set command",
       "destination",
       "port",
@@ -256,7 +256,7 @@ static void _cli_setup(struct cli_server* server)
     cli_server_install_cmd(server, CONFIG_NODE, &_set_dst_port_cmd);
     cli_server_install_cmd(server, CONFIG_NODE, &_set_dst_ip_cmd);
     cli_server_install_cmd(server, CONFIG_NODE, &_set_host_name_cmd);
-    // cli_server_install_cmd(server, CONFIG_NODE, &_set_total_cmd);
+    cli_server_install_cmd(server, CONFIG_NODE, &_set_total_cmd);
 
     return;
 }

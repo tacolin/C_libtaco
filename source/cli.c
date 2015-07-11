@@ -446,6 +446,13 @@ static void _change_curr_cmd(struct cli* cli, char* newcmd)
     return;
 }
 
+static int _compare_str(void* data, void* arg)
+{
+    struct cli_cmd* cmd = (struct cli_cmd*)data;
+    char* str = (char*)arg;
+    return (0 == strcmp(cmd->str, str));
+}
+
 static int _compare_cmd_str(void* data, void* arg)
 {
     struct cli_cmd* c = (struct cli_cmd*)data;
@@ -497,15 +504,15 @@ static int _match_cmd(struct array* sub_cmds, char* cmd_str, struct array** matc
     struct cli_cmd* cmd = (struct cli_cmd*)array_find(sub_cmds, _compare_cmd_str, cmd_str);
     if (cmd != NULL)
     {
-        if (cmd->type == CMD_TOKEN)
+        // if (cmd->type == CMD_TOKEN)
         {
             array_add(*matches, cmd);
             return CLI_FULL_MATCH;
         }
-        else
-        {
-            return CLI_MULTI_MATCHES;
-        }
+        // else
+        // {
+        //     return CLI_MULTI_MATCHES;
+        // }
     }
     else
     {
@@ -751,7 +758,7 @@ static int _proc_tab(struct cli* cli, unsigned char* c)
                 array_release(matches);
                 sub_cmds = cmd->sub_cmds;
 
-                strcat(newcmd, cmd->str);
+                strcat(newcmd, (char*)str_array->datas[i]);
                 strcat(newcmd, " ");
             }
             else if (ret == CLI_PARTIAL_MATCH)
@@ -1593,13 +1600,6 @@ static int _decide_cmd_type(char* text)
     return CMD_TOKEN;
 }
 
-static int _compare_str(void* data, void* arg)
-{
-    struct cli_cmd* cmd = (struct cli_cmd*)data;
-    char* str = (char*)arg;
-    return (0 == strcmp(cmd->str, str)) ? 1 : 0;
-}
-
 static struct cli_cmd* _install_cmd_element(struct cli_server* server, struct cli_cmd* parent, char* string, cli_func func, int node_id, char* desc, int alternative)
 {
     CHECK_IF(string == NULL, return NULL, "string is null");
@@ -1612,6 +1612,7 @@ static struct cli_cmd* _install_cmd_element(struct cli_server* server, struct cl
     struct cli_cmd* c = (struct cli_cmd*)array_find(cmds, _compare_str, pre_process_str);
     if (c != NULL)
     {
+        dprint("c exist, c->type = %d, c->str = %s", c->type, c->str);
         free(pre_process_str);
         c->func = func;
         return c;
