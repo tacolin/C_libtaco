@@ -1648,7 +1648,6 @@ static struct cli_cmd* _install_cmd_element(struct cli_server* server, struct cl
     struct cli_cmd* c = (struct cli_cmd*)array_find(cmds, _compare_str, pre_process_str);
     if (c != NULL)
     {
-        dprint("c exist, c->type = %d, c->str = %s", c->type, c->str);
         free(pre_process_str);
         c->func = func;
         return c;
@@ -1709,11 +1708,14 @@ static int _install_wrapper(struct cli_server* server, struct cli_cmd* parent, s
     {
         if (IS_OPT_CMD(str))
         {
-            char* content = NULL;
-            sscanf(str, "[%s]", content);
+            struct array* content_array = _string_to_array(str, "[]");
 
-            _install_cmd_element(server, parent, content, func, node_id, desc, 1);
+            dprint("content = %s", (char*)content_array->datas[0]);
+
+            _install_cmd_element(server, parent, (char*)content_array->datas[0], func, node_id, desc, 1);
             parent->func = func;
+
+            array_release(content_array);
         }
         else if (IS_ALT_CMD(str))
         {
@@ -1742,12 +1744,13 @@ static int _install_wrapper(struct cli_server* server, struct cli_cmd* parent, s
         struct cli_cmd* c = NULL;
         if (IS_OPT_CMD(str))
         {
-            char* content = NULL;
-            sscanf(str, "[%s]", content);
+            struct array* content_array = _string_to_array(str, "[]");
 
-            c = _install_cmd_element(server, parent, content, NULL, node_id, desc, 1);
+            c = _install_cmd_element(server, parent, (char*)content_array->datas[0], NULL, node_id, desc, 1);
             _install_wrapper(server, c, str_array, func, node_id, desc_array, idx+1);
             _install_wrapper(server, parent, str_array, func, node_id, desc_array, idx+1);
+
+            array_release(content_array);
         }
         else if (IS_ALT_CMD(str))
         {

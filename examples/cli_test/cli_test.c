@@ -100,10 +100,15 @@ DEFUN(_exit_node,
 
 DEFUN(_show_info,
       _show_info_cmd,
-      "show info",
+      "show info [taco]",
       "show command",
       "information")
 {
+    cli_print(cli, "argc = %d", argc);
+    if (argc > 0)
+    {
+        cli_print(cli, "argv[0] = %s", argv[0]);
+    }
     cli_print(cli, "current info is :");
     cli_print(cli, "dst port = %d", _taco_data.dst_port);
     cli_print(cli, "dst ipv4 = %s", _taco_data.dst_ip);
@@ -265,6 +270,8 @@ int main(int argc, char const *argv[])
 {
     struct cli_server server = {};
     struct cli cli = {};
+
+    signal(SIGINT, _sigIntHandler);
 
     _cli_setup(&server);
 
