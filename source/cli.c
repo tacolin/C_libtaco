@@ -1501,108 +1501,66 @@ int cli_server_install_node(struct cli_server* server, int id, char* prompt)
 
 static char* _pre_process_string(char* string)
 {
-    char* tmp = strdup(string);
-    int len = strlen(tmp);
+    int len = strlen(string);
+    char tmp[len+1];
+    snprintf(tmp, len+1, "%s", string);
 
     int i;
     for (i=0; i<strlen(tmp); i++)
     {
-        if (tmp[i] == '(')
+        if ((tmp[i] == '(') || (tmp[i] == '[') || (tmp[i] == '<'))
         {
-            int count = 1;
-            int begin = i;
-            int end;
-            for (end=begin+1; end<strlen(tmp); end++)
+            if (tmp[i+1] == ' ')
             {
-                if (tmp[end] == '(') count++;
-
-                if (tmp[end] == ')') count--;
-
-                if (count == 0)
+                int j;
+                for (j=i+1; j<strlen(tmp)-1; j++)
                 {
-                    int j;
-                    for (j=begin+1; j<=end; j++)
-                    {
-                        while (tmp[j] == ' ')
-                        {
-                            int k;
-                            for (k=j; k<strlen(tmp)-1; k++)
-                            {
-                                tmp[k] = tmp[k+1];
-                            }
-                            end--;
-                            len--;
-                        }
-                    }
-                    break;
+                    tmp[j] = tmp[j+1];
                 }
+                len--;
+                i--;
             }
         }
-        else if (tmp[i] == '[')
+        else if ((tmp[i] == ')') || (tmp[i] == ']') || (tmp[i] == '>'))
         {
-            int count = 1;
-            int begin = i;
-            int end;
-            for (end=begin+1; end<strlen(tmp); end++)
+            if (tmp[i-1] == ' ')
             {
-                if (tmp[end] == '[') count++;
-
-                if (tmp[end] == ']') count--;
-
-                if (count == 0)
+                int j;
+                for (j=i-1; j<strlen(tmp)-1; j++)
                 {
-                    int j;
-                    for (j=begin+1; j<=end; j++)
-                    {
-                        while (tmp[j] == ' ')
-                        {
-                            int k;
-                            for (k=j; k<strlen(tmp)-1; k++)
-                            {
-                                tmp[k] = tmp[k+1];
-                            }
-                            end--;
-                            len--;
-                        }
-                    }
-                    break;
+                    tmp[j] = tmp[j+1];
                 }
+                len--;
+                i--;
             }
         }
-        else if (tmp[i] == '<')
+        else if (tmp[i] == '|')
         {
-            int count = 1;
-            int begin = i;
-            int end;
-            for (end=begin+1; end<strlen(tmp); end++)
+            if (tmp[i+1] == ' ')
             {
-                if (tmp[end] == '<') count++;
-
-                if (tmp[end] == '>') count--;
-
-                if (count == 0)
+                int j;
+                for (j=i+1; j<strlen(tmp)-1; j++)
                 {
-                    int j;
-                    for (j=begin+1; j<=end; j++)
-                    {
-                        while (tmp[j] == ' ')
-                        {
-                            int k;
-                            for (k=j; k<strlen(tmp)-1; k++)
-                            {
-                                tmp[k] = tmp[k+1];
-                            }
-                            end--;
-                            len--;
-                        }
-                    }
-                    break;
+                    tmp[j] = tmp[j+1];
                 }
+                len--;
+                i--;
+            }
+
+            if (tmp[i-1] == ' ')
+            {
+                int j;
+                for (j=i-1; j<strlen(tmp)-1; j++)
+                {
+                    tmp[j] = tmp[j+1];
+                }
+                len--;
+                i--;
             }
         }
     }
     tmp[len] = '\0';
-    return tmp;
+    return strdup(tmp);
 }
 
 static bool _is_all_upper(char* text)
@@ -1709,8 +1667,6 @@ static int _install_wrapper(struct cli_server* server, struct cli_cmd* parent, s
         if (IS_OPT_CMD(str))
         {
             struct array* content_array = _string_to_array(str, "[]");
-
-            dprint("content = %s", (char*)content_array->datas[0]);
 
             _install_cmd_element(server, parent, (char*)content_array->datas[0], func, node_id, desc, 1);
             parent->func = func;
