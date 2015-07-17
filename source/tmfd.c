@@ -4,6 +4,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/time.h>
+#include <time.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 
@@ -42,6 +43,19 @@ static struct list _stopped_list;
 
 static pthread_t _tick_thread;
 static int _is_running = 0;
+
+static int _get_time_of_day(struct timeval* timeval, void* arg)
+{
+    struct timespec spec = {};
+    int ret = clock_gettime(CLOCK_MONOTONIC, &spec);
+    if (ret == -1)
+    {
+        return ret;
+    }
+    timeval->tv_sec  = spec.tv_sec;
+    timeval->tv_usec = spec.tv_nsec / 1000;
+    return ret;
+}
 
 static int _find_tmfd_rec(void* data, void* arg)
 {
@@ -105,7 +119,7 @@ static void* _tick_routine(void* arg)
         LOCK();
         while ((rec = list_head(&_running_list)) != NULL)
         {
-            gettimeofday(&curr, NULL);
+            _get_time_of_day(&curr, NULL);
 
             if (timercmp(&curr, &(rec->expire), <)) break;
 
@@ -211,7 +225,7 @@ int tmfd_settime(int tmfd, int flags, const struct itmfdspec *new_value, struct 
     }
 
     struct timeval curr, new_time_val;
-    gettimeofday(&curr, NULL);
+    _get_time_of_day(&curr, NULL);
 
     new_time_val.tv_sec  = new_value->it_value.tv_sec;
     new_time_val.tv_usec = new_value->it_value.tv_nsec / 1000;
@@ -246,7 +260,7 @@ int tmfd_gettime(int tmfd, struct itmfdspec *old_value)
     }
 
     struct timeval curr, rest;
-    gettimeofday(&curr, NULL);
+    _get_time_of_day(&curr, NULL);
 
     timersub(&(rec->expire), &curr, &rest);
 
