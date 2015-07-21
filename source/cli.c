@@ -53,6 +53,7 @@ enum
     PROC_PRE_CONT,
     PROC_ERROR,
     PROC_NONE,
+    PROC_BREAK,
 
     PROC_RETURN_VALUES
 };
@@ -457,7 +458,7 @@ static int _compare_cmd_str(void* data, void* arg)
 {
     struct cli_cmd* c = (struct cli_cmd*)data;
     char* str = (char*)arg;
-    bool ret;
+    bool ret = true;
 
     if (c->type == CMD_TOKEN)
     {
@@ -468,14 +469,27 @@ static int _compare_cmd_str(void* data, void* arg)
         // long lbound, ubound;
         // sscanf(c->str, "<%ld-%ld>", &lbound, &ubound);
 
-        long value = strtol(str, NULL, 10);
-        if ((value == ERANGE) || (value > c->ubound) || (value < c->lbound))
+        int i;
+        int len = strlen(str);
+        for (i=0; i<len; i++)
         {
-            ret = false;
+            if ((str[i] < '0') || (str[i] > '9'))
+            {
+                ret = false;
+            }
         }
-        else
+
+        if (ret)
         {
-            ret = true;
+            long value = strtol(str, NULL, 10);
+            if ((value == ERANGE) || (value > c->ubound) || (value < c->lbound))
+            {
+                ret = false;
+            }
+            else
+            {
+                ret = true;
+            }
         }
     }
     else if (c->type == CMD_IPV4)
@@ -1042,7 +1056,7 @@ static int _proc_ctrl(struct cli* cli, unsigned char *c)
         else
         {
             cli->len = -1;
-            return PROC_ERROR;
+            return PROC_BREAK;
         }
     }
 
@@ -1170,7 +1184,7 @@ static int _proc_login(struct cli* cli)
         cli->count++;
         return PROC_PRE_CONT;
     }
-    return PROC_ERROR;
+    return PROC_BREAK;
 }
 
 static int _proc_password(struct cli* cli)
@@ -1345,6 +1359,10 @@ static int _process(struct cli* cli, char c)
     {
         goto _PRE_CONT;
     }
+    else if (ret == PROC_BREAK)
+    {
+        goto _BREAK;
+    }
 
     if (c == '?' && cli->cursor == cli->len)
     {
@@ -1372,7 +1390,7 @@ static int _process(struct cli* cli, char c)
 
             if (exec_ret == CLI_BREAK)
             {
-                goto _ERROR;
+                goto _BREAK;
             }
         }
         else if (cli->state == CLI_ST_LOGIN)
@@ -1381,6 +1399,10 @@ static int _process(struct cli* cli, char c)
             if (ret == PROC_ERROR)
             {
                 goto _ERROR;
+            }
+            else if (ret == PROC_BREAK)
+            {
+                goto _BREAK;
             }
         }
         else if (cli->state == CLI_ST_PASSWORD)
@@ -1457,6 +1479,9 @@ _PRE_CONT:
 
 _ERROR:
     return CLI_FAIL;
+
+_BREAK:
+    return CLI_BREAK;
 }
 
 int cli_process(struct cli* cli)
@@ -1554,7 +1579,7 @@ static char* _pre_process_string(char* string)
                     tmp[j] = tmp[j+1];
                 }
                 len--;
-                i--;
+                i -= 2;
             }
         }
         else if (tmp[i] == '|')
@@ -1569,8 +1594,7 @@ static char* _pre_process_string(char* string)
                 len--;
                 i--;
             }
-
-            if (tmp[i-1] == ' ')
+            else if (tmp[i-1] == ' ')
             {
                 int j;
                 for (j=i-1; j<strlen(tmp)-1; j++)
@@ -1578,7 +1602,7 @@ static char* _pre_process_string(char* string)
                     tmp[j] = tmp[j+1];
                 }
                 len--;
-                i--;
+                i -= 2;
             }
         }
     }
@@ -1798,7 +1822,7 @@ int cli_server_default_mode(struct cli_server* server, int id)
     CHECK_IF(server->is_init != 1, return CLI_FAIL, "server is not init yet");
 
     struct cli_mode* mode = _get_mode(server->modes, id);
-    CHECK_IF(mode != NULL, return CLI_FAIL, "mode with id = %d has already exists", id);
+    CHECK_IF(mode == NULL, return CLI_FAIL, "mode with id = %d doest not exists", id);
 
     server->default_mode = mode;
     return CLI_OK;
@@ -1824,7 +1848,6 @@ static void _save_to_file(int idx, void* data, void* arg)
 {
     FILE* fp = (FILE*)arg;
     fprintf(fp, "%s\n", (char*)data);
-    derror("here %d", idx);
     return;
 }
 
@@ -1851,7 +1874,7 @@ _ERROR:
     return CLI_FAIL;
 }
 
-int cli_read_file(struct cli* cli, char* filepath)
+int cli_execute_file(struct cli* cli, char* filepath)
 {
     CHECK_IF(cli == NULL, return CLI_FAIL, "cli is null");
     CHECK_IF(cli->is_init != 1, return CLI_FAIL, "cli is not init yet");

@@ -1,6 +1,8 @@
 #ifndef _CLI_H_
 #define _CLI_H_
 
+#include <string.h>
+
 #include "array.h"
 #include "history.h"
 #include "tcp.h"
@@ -101,7 +103,7 @@ int cli_server_banner(struct cli_server* server, char* banner);
 int cli_server_regular_func(struct cli_server* server, cli_func regular);
 
 int cli_server_install_mode(struct cli_server* server, int id, char* prompt);
-int cli_server_install_cmd(struct cli_server* server, int node_id, struct cli_cmd_cfg* cfg);
+int cli_server_install_cmd(struct cli_server* server, int mode_id, struct cli_cmd_cfg* cfg);
 int cli_server_default_mode(struct cli_server* server, int id);
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -109,11 +111,10 @@ int cli_server_default_mode(struct cli_server* server, int id);
 int cli_uninit(struct cli* cli);
 int cli_process(struct cli* cli);
 
-int cli_change_mode(struct cli* cli, int node_id);
-
-int cli_execute_cmd(struct cli* cli, char* string);
+int cli_change_mode(struct cli* cli, int mode_id);
 
 int cli_save_histories(struct cli* cli, char* filepath);
+int cli_execute_file(struct cli* cli, char* filepath);
 
 ////////////////////////////////////////////////////////////////////////////////
 
