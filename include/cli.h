@@ -16,7 +16,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 struct cli;
-struct cli_node;
+struct cli_mode;
 
 typedef int (*cli_func)(struct cli* cli, int argc, char* argv[]);
 
@@ -41,13 +41,14 @@ struct cli
     char* prompt;
 
     int cursor;
+    int insert_mode;
 
     int is_option;
     int esc;
-    int insert_mode;
     int is_home;
     int is_end;
     int is_delete;
+    int is_insert_replace;
     int in_history;
 
     char lastchar;
@@ -57,10 +58,10 @@ struct cli
     char* password;
     int count;
 
-    struct array* nodes;
+    struct array* modes;
     cli_func regular;
 
-    int node_id;
+    int mode_id;
 
     int state;
 
@@ -84,10 +85,10 @@ struct cli_server
     char* username;
     char* password;
 
-    struct array* nodes;
+    struct array* modes;
     cli_func regular;
 
-    struct cli_node* default_node;
+    struct cli_mode* default_mode;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -99,16 +100,16 @@ int cli_server_accept(struct cli_server* server, struct cli* cli);
 int cli_server_banner(struct cli_server* server, char* banner);
 int cli_server_regular_func(struct cli_server* server, cli_func regular);
 
-int cli_server_install_node(struct cli_server* server, int id, char* prompt);
+int cli_server_install_mode(struct cli_server* server, int id, char* prompt);
 int cli_server_install_cmd(struct cli_server* server, int node_id, struct cli_cmd_cfg* cfg);
-int cli_server_default_node(struct cli_server* server, int id);
+int cli_server_default_mode(struct cli_server* server, int id);
 
 ////////////////////////////////////////////////////////////////////////////////
 
 int cli_uninit(struct cli* cli);
 int cli_process(struct cli* cli);
 
-int cli_change_node(struct cli* cli, int node_id);
+int cli_change_mode(struct cli* cli, int node_id);
 
 int cli_execute_cmd(struct cli* cli, char* string);
 

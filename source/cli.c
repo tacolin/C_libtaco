@@ -15,7 +15,6 @@
 #define IS_OPT_CMD(str) (str[0] == '[')
 #define IS_ALT_CMD(str) (str[0] == '(')
 
-#define dprint(a, b...) fprintf(stdout, "%s(): "a"\n", __func__, ##b)
 #define derror(a, b...) fprintf(stderr, "[ERROR] %s(): "a"\n", __func__, ##b)
 #define CHECK_IF(assertion, error_action, ...) \
 {\
@@ -70,7 +69,7 @@ enum
 
 ////////////////////////////////////////////////////////////////////////////////
 
-struct cli_node
+struct cli_mode
 {
     int id;
     char* prompt;
@@ -93,25 +92,25 @@ struct cli_cmd
 
 ////////////////////////////////////////////////////////////////////////////////
 
-static int _compare_node_id(void* data, void* arg)
+static int _compare_mode_id(void* data, void* arg)
 {
-    struct cli_node* n = (struct cli_node*)data;
+    struct cli_mode* mode = (struct cli_mode*)data;
     int* id = (int*)arg;
-    return (n->id == *id) ? 1 : 0 ;
+    return (mode->id == *id) ? 1 : 0 ;
 }
 
-static struct cli_node* _get_node(struct array* array, int id)
+static struct cli_mode* _get_mode(struct array* array, int id)
 {
-    return (struct cli_node*)array_find(array, _compare_node_id, &id);
+    return (struct cli_mode*)array_find(array, _compare_mode_id, &id);
 }
 
-static void _clean_node(void* data)
+static void _clean_mode(void* data)
 {
     if (data)
     {
-        struct cli_node* n = (struct cli_node*)data;
-        if (n->prompt) free(n->prompt);
-        array_release(n->cmds);
+        struct cli_mode* mode = (struct cli_mode*)data;
+        if (mode->prompt) free(mode->prompt);
+        array_release(mode->cmds);
         free(data);
     }
 }
@@ -127,7 +126,7 @@ int cli_server_init(struct cli_server* server, char* local_ipv4, int local_port,
     CHECK_IF(chk != TCP_OK, return CLI_FAIL, "tcp_server_init failed");
 
     server->fd    = server->tcp_server.fd;
-    server->nodes = array_create(_clean_node);
+    server->modes = array_create(_clean_mode);
     if (username)
     {
         server->username = strdup(username);
@@ -150,10 +149,10 @@ int cli_server_uninit(struct cli_server* server)
     server->fd = -1;
     server->is_init = 0;
 
-    if (server->nodes)
+    if (server->modes)
     {
-        array_release(server->nodes);
-        server->nodes = NULL;
+        array_release(server->modes);
+        server->modes = NULL;
     }
 
     if (server->username)
@@ -240,16 +239,16 @@ int cli_server_accept(struct cli_server* server, struct cli* cli)
     cli->banner      = server->banner;
     cli->username    = server->username;
     cli->password    = server->password;
-    cli->nodes       = server->nodes;
+    cli->modes       = server->modes;
     cli->regular     = server->regular;
-    cli->node_id     = server->default_node->id;
+    cli->mode_id     = server->default_mode->id;
     cli->is_init     = 1;
     cli->state       = (cli->username == NULL) ? CLI_ST_NORMAL : CLI_ST_LOGIN ;
 
     if (cli->state == CLI_ST_NORMAL)
     {
-        struct cli_node* node = _get_node(cli->nodes, cli->node_id);
-        cli->prompt = strdup(node->prompt);
+        struct cli_mode* mode = _get_mode(cli->modes, cli->mode_id);
+        cli->prompt = strdup(mode->prompt);
         _show_banner(cli);
         cli_send(cli, "\r\n", 2);
     }
@@ -346,10 +345,11 @@ static void _del_one_char(struct cli* cli)
 
         cli_send(cli, " ", 1);
 
-        for (i=0; i<= (int)strlen(cli->cmd + cli->cursor); i++)
-        {
-            cli_send(cli, "\b", 1);
-        }
+        int len = (int)strlen(cli->cmd + cli->cursor) + 1;
+        char msg[len];
+        memset(msg, '\b', len);
+
+        cli_send(cli, msg, len);
     }
     cli->len--;
 }
@@ -567,13 +567,13 @@ static struct array* _string_to_array(char* string, char* delimiters)
 
 static void _show_desc(struct cli* cli)
 {
-    struct cli_node* node = _get_node(cli->nodes, cli->node_id);
-    CHECK_IF(node == NULL, return, "_get_node failed by node_id = %d", cli->node_id);
+    struct cli_mode* mode = _get_mode(cli->modes, cli->mode_id);
+    CHECK_IF(mode == NULL, return, "_get_mode failed by mode_id = %d", cli->mode_id);
 
     struct array* str_array = _string_to_array(cli->cmd, " \r\n\t");
     CHECK_IF(str_array == NULL, return, "_string_to_array failed");
 
-    struct array* sub_cmds = node->cmds;
+    struct array* sub_cmds = mode->cmds;
     int i;
 
     if (str_array->num == 0)
@@ -672,14 +672,14 @@ static int _proc_tab(struct cli* cli, unsigned char* c)
         return PROC_CONT;
     }
 
-    struct cli_node* node = _get_node(cli->nodes, cli->node_id);
-    if (node == NULL)
+    struct cli_mode* mode = _get_mode(cli->modes, cli->mode_id);
+    if (mode == NULL)
     {
         return PROC_CONT;
     }
 
     char newcmd[CLI_MAX_CMD_SIZE+1] = {0};
-    struct array* sub_cmds  = node->cmds;
+    struct array* sub_cmds  = mode->cmds;
     struct array* str_array = _string_to_array(cli->cmd, " \r\n\t");
     int ret = CLI_NO_MATCH;
     struct array* matches = NULL;
@@ -849,13 +849,11 @@ static int _proc_ctrl(struct cli* cli, unsigned char *c)
                     break;
 
                 case '1':
-                    dprint("home key");
                     cli->is_home = 1;
                     return PROC_CONT;
                     // break;
 
                 case '4':
-                    dprint("end key");
                     cli->is_end = 1;
                     return PROC_CONT;
                     // break;
@@ -864,6 +862,10 @@ static int _proc_ctrl(struct cli* cli, unsigned char *c)
                     cli->is_delete = 1;
                     return PROC_CONT;
                     // break;
+
+                case 50:
+                    cli->is_insert_replace = 1;
+                    return PROC_CONT;
 
                 default:
                     *c = 0;
@@ -875,6 +877,16 @@ static int _proc_ctrl(struct cli* cli, unsigned char *c)
             cli->esc = (*c == '[') ? *c : 0;
             return PROC_CONT;
         }
+    }
+
+    if (cli->is_insert_replace)
+    {
+        if (*c == '~')
+        {
+            cli->insert_mode = (cli->insert_mode) ? 0 : 1 ;
+        }
+        cli->is_insert_replace = 0;
+        return PROC_CONT;
     }
 
     if (cli->is_home)
@@ -903,7 +915,6 @@ static int _proc_ctrl(struct cli* cli, unsigned char *c)
 
     if (cli->is_delete)
     {
-        // 只刪一個 char
         if (*c == 126 && cli->cursor != cli->len)
         {
             _del_one_char(cli);
@@ -919,49 +930,56 @@ static int _proc_ctrl(struct cli* cli, unsigned char *c)
         return PROC_PRE_CONT;
     }
 
-    //  backword          backspace         delete
-    if (*c == CTRL('W') || *c == CTRL('H') || *c == 0x7f)
+    if (*c == CTRL('W')) // backword
     {
-        int back = 0;
-
-        if (*c == CTRL('W'))
+        if (cli->len == 0 || cli->cursor == 0)
         {
-            if (cli->len == 0) return PROC_CONT;
-
-            if (cli->cursor == 0) return PROC_CONT;
-
-            int nc = cli->cursor;
-            while (nc && cli->cmd[nc-1] == ' ') // calculate back redundant space
-            {
-                nc--;
-                back++;
-            }
-
-            while (nc && cli->cmd[nc-1] != ' ') // calculate back word
-            {
-                nc--;
-                back++;
-            }
-        }
-        else
-        {
-            if (cli->len == 0 || cli->cursor == 0)
-            {
-                cli_send(cli, "\a", 1);
-                return PROC_CONT;
-            }
-            back = 1;
-        }
-
-        if (back)
-        {
-            while (back)
-            {
-                _del_one_char(cli);
-                back--;
-            }
+            cli_send(cli, "\a", 1);
             return PROC_CONT;
         }
+
+        int back = 0;
+        int nc = cli->cursor;
+        while (nc && cli->cmd[nc-1] == ' ') // calculate back redundant space
+        {
+            nc--;
+            back++;
+        }
+
+        while (nc && cli->cmd[nc-1] != ' ') // calculate back word
+        {
+            nc--;
+            back++;
+        }
+
+        while (back)
+        {
+            _del_one_char(cli);
+            back--;
+        }
+        return PROC_CONT;
+    }
+    else if (*c == 0x7f) // delete
+    {
+        if (cli->len == 0 || cli->cursor == 0)
+        {
+            cli_send(cli, "\a", 1);
+            return PROC_CONT;
+        }
+        _del_one_char(cli);
+        return PROC_CONT;
+    }
+    else if (*c == CTRL('H')) // backspace
+    {
+        if (cli->len == 0 || cli->cursor == 0)
+        {
+            cli_send(cli, "\a", 1);
+            return PROC_CONT;
+        }
+        cli_send(cli, "\b", 1);
+        cli->cursor--;
+        _del_one_char(cli);
+        return PROC_CONT;
     }
 
     if (*c == CTRL('L'))
@@ -1017,10 +1035,15 @@ static int _proc_ctrl(struct cli* cli, unsigned char *c)
         // EOT
         if (cli->len > 0)
         {
-            return PROC_CONT;
+            cli_send(cli, "\a", 1);
+            cli_send(cli, "\r\n", 2);
+            return PROC_PRE_CONT;
         }
-        cli->len = -1;
-        return PROC_ERROR;
+        else
+        {
+            cli->len = -1;
+            return PROC_ERROR;
+        }
     }
 
     if (*c == CTRL('Z'))
@@ -1128,8 +1151,8 @@ static int _proc_login(struct cli* cli)
         {
             cli->state = CLI_ST_NORMAL;
             free(cli->prompt);
-            struct cli_node* node = _get_node(cli->nodes, cli->node_id);
-            cli->prompt = strdup(node->prompt);
+            struct cli_mode* mode = _get_mode(cli->modes, cli->mode_id);
+            cli->prompt = strdup(mode->prompt);
             cli->count = 0;
 
             cli_send(cli, "\r\n", 2);
@@ -1157,8 +1180,8 @@ static int _proc_password(struct cli* cli)
         cli->state = CLI_ST_NORMAL;
         free(cli->prompt);
 
-        struct cli_node* node = _get_node(cli->nodes, cli->node_id);
-        cli->prompt = strdup(node->prompt);
+        struct cli_mode* mode = _get_mode(cli->modes, cli->mode_id);
+        cli->prompt = strdup(mode->prompt);
         cli->count = 0;
 
         cli_send(cli, "\r\n", 2);
@@ -1222,7 +1245,7 @@ static struct array* _get_fit_cmds(struct array* source, char* str)
     return ret;
 }
 
-static int _execute_cmd(struct cli* cli, int node_id, char* string)
+static int _execute_cmd(struct cli* cli, int mode_id, char* string)
 {
     CHECK_IF(cli == NULL, return CLI_FAIL, "cli is null");
     CHECK_IF(cli->is_init != 1, return CLI_FAIL, "cli is not init yet");
@@ -1231,13 +1254,13 @@ static int _execute_cmd(struct cli* cli, int node_id, char* string)
     CHECK_IF(string == NULL, return CLI_FAIL, "string is null");
     CHECK_IF(strlen(string) > CLI_MAX_CMD_SIZE, return CLI_FAIL, "string len = %zd invalid", strlen(string));
 
-    struct cli_node* node = _get_node(cli->nodes, node_id);
-    CHECK_IF(node == NULL, return CLI_FAIL, "node with id = %d does not exist", node_id);
+    struct cli_mode* mode = _get_mode(cli->modes, mode_id);
+    CHECK_IF(mode == NULL, return CLI_FAIL, "mode with id = %d does not exist", mode_id);
 
     struct array* str_array = _string_to_array(string, " \r\t\n");
     CHECK_IF(str_array == NULL, return CLI_FAIL, "_string_to_array failed");
 
-    struct array* cmds      = node->cmds;
+    struct array* cmds      = mode->cmds;
     struct array* fit_cmds  = NULL;
     struct array* arguments = array_create(NULL);
     int i;
@@ -1296,7 +1319,7 @@ static int _execute_cmd(struct cli* cli, int node_id, char* string)
 
 int cli_execute_cmd(struct cli* cli, char* string)
 {
-    return _execute_cmd(cli, cli->node_id, string);
+    return _execute_cmd(cli, cli->mode_id, string);
 }
 
 static int _process(struct cli* cli, char c)
@@ -1340,7 +1363,7 @@ static int _process(struct cli* cli, char c)
     {
         if (cli->state == CLI_ST_NORMAL)
         {
-            int exec_ret = _execute_cmd(cli, cli->node_id, cli->cmd);
+            int exec_ret = _execute_cmd(cli, cli->mode_id, cli->cmd);
             if (!_is_empty_string(cli->cmd))
             {
                 history_addstr(cli->history, cli->cmd);
@@ -1477,24 +1500,24 @@ static void _clean_cmd(void* data)
     }
 }
 
-int cli_server_install_node(struct cli_server* server, int id, char* prompt)
+int cli_server_install_mode(struct cli_server* server, int id, char* prompt)
 {
     CHECK_IF(server == NULL, return CLI_FAIL, "server is null");
     CHECK_IF(server->fd <= 0, return CLI_FAIL, "server fd = %d invalid", server->fd);
     CHECK_IF(server->is_init != 1, return CLI_FAIL, "server is not init yet");
     CHECK_IF(prompt == NULL, return CLI_FAIL, "prompt is null");
 
-    struct cli_node* node = _get_node(server->nodes, id);
-    CHECK_IF(node != NULL, return CLI_FAIL, "node with id = %d has already exists", id);
+    struct cli_mode* mode = _get_mode(server->modes, id);
+    CHECK_IF(mode != NULL, return CLI_FAIL, "mode with id = %d has already exists", id);
 
-    node         = calloc(sizeof(*node), 1);
-    node->id     = id;
-    node->prompt = strdup(prompt);
-    node->cmds   = array_create(_clean_cmd);
+    mode         = calloc(sizeof(*mode), 1);
+    mode->id     = id;
+    mode->prompt = strdup(prompt);
+    mode->cmds   = array_create(_clean_cmd);
 
-    array_add(server->nodes, node);
+    array_add(server->modes, mode);
 
-    if (server->default_node == NULL) server->default_node = node;
+    if (server->default_mode == NULL) server->default_mode = mode;
 
     return CLI_OK;
 }
@@ -1594,15 +1617,15 @@ static int _decide_cmd_type(char* text)
     return CMD_TOKEN;
 }
 
-static struct cli_cmd* _install_cmd_element(struct cli_server* server, struct cli_cmd* parent, char* string, cli_func func, int node_id, char* desc, int alternative)
+static struct cli_cmd* _install_cmd_element(struct cli_server* server, struct cli_cmd* parent, char* string, cli_func func, int mode_id, char* desc, int alternative)
 {
     CHECK_IF(string == NULL, return NULL, "string is null");
 
-    struct cli_node* node = _get_node(server->nodes, node_id);
-    CHECK_IF(node == NULL, return NULL, "node with id = %d is not in the list", node_id);
+    struct cli_mode* mode = _get_mode(server->modes, mode_id);
+    CHECK_IF(mode == NULL, return NULL, "mode with id = %d is not in the list", mode_id);
 
     char* pre_process_str = _pre_process_string(string);
-    struct array* cmds = (parent) ? (parent->sub_cmds) : (node->cmds);
+    struct array* cmds = (parent) ? (parent->sub_cmds) : (mode->cmds);
     struct cli_cmd* c = (struct cli_cmd*)array_find(cmds, _compare_str, pre_process_str);
     if (c != NULL)
     {
@@ -1654,7 +1677,7 @@ static bool _is_alt_cmd_with_opt(char* str)
     return false;
 }
 
-static int _install_wrapper(struct cli_server* server, struct cli_cmd* parent, struct array* str_array, cli_func func, int node_id, struct array* desc_array, int idx)
+static int _install_wrapper(struct cli_server* server, struct cli_cmd* parent, struct array* str_array, cli_func func, int mode_id, struct array* desc_array, int idx)
 {
     CHECK_IF(str_array == NULL, return CLI_FAIL, "str_array is null");
     CHECK_IF(idx < 0, return CLI_FAIL, "idx = %d invalid", idx);
@@ -1668,7 +1691,7 @@ static int _install_wrapper(struct cli_server* server, struct cli_cmd* parent, s
         {
             struct array* content_array = _string_to_array(str, "[]");
 
-            _install_cmd_element(server, parent, (char*)content_array->datas[0], func, node_id, desc, 1);
+            _install_cmd_element(server, parent, (char*)content_array->datas[0], func, mode_id, desc, 1);
             parent->func = func;
 
             array_release(content_array);
@@ -1681,7 +1704,7 @@ static int _install_wrapper(struct cli_server* server, struct cli_cmd* parent, s
             for (i=0; i<content_array->num; i++)
             {
                 content = (char*)content_array->datas[i];
-                _install_cmd_element(server, parent, content, func, node_id, desc, 1);
+                _install_cmd_element(server, parent, content, func, mode_id, desc, 1);
             }
             array_release(content_array);
 
@@ -1692,7 +1715,7 @@ static int _install_wrapper(struct cli_server* server, struct cli_cmd* parent, s
         }
         else
         {
-            _install_cmd_element(server, parent, str, func, node_id, desc, 0);
+            _install_cmd_element(server, parent, str, func, mode_id, desc, 0);
         }
     }
     else
@@ -1702,9 +1725,9 @@ static int _install_wrapper(struct cli_server* server, struct cli_cmd* parent, s
         {
             struct array* content_array = _string_to_array(str, "[]");
 
-            c = _install_cmd_element(server, parent, (char*)content_array->datas[0], NULL, node_id, desc, 1);
-            _install_wrapper(server, c, str_array, func, node_id, desc_array, idx+1);
-            _install_wrapper(server, parent, str_array, func, node_id, desc_array, idx+1);
+            c = _install_cmd_element(server, parent, (char*)content_array->datas[0], NULL, mode_id, desc, 1);
+            _install_wrapper(server, c, str_array, func, mode_id, desc_array, idx+1);
+            _install_wrapper(server, parent, str_array, func, mode_id, desc_array, idx+1);
 
             array_release(content_array);
         }
@@ -1716,26 +1739,26 @@ static int _install_wrapper(struct cli_server* server, struct cli_cmd* parent, s
             for (i=0; i<content_array->num; i++)
             {
                 content = (char*)content_array->datas[i];
-                c = _install_cmd_element(server, parent, content, NULL, node_id, desc, 1);
-                _install_wrapper(server, c, str_array, func, node_id, desc_array, idx+1);
+                c = _install_cmd_element(server, parent, content, NULL, mode_id, desc, 1);
+                _install_wrapper(server, c, str_array, func, mode_id, desc_array, idx+1);
             }
             array_release(content_array);
 
             if (_is_alt_cmd_with_opt(str))
             {
-                _install_wrapper(server, parent, str_array, func, node_id, desc_array, idx+1);
+                _install_wrapper(server, parent, str_array, func, mode_id, desc_array, idx+1);
             }
         }
         else
         {
-            c = _install_cmd_element(server, parent, str, NULL, node_id, desc, 0);
-            _install_wrapper(server, c, str_array, func, node_id, desc_array, idx+1);
+            c = _install_cmd_element(server, parent, str, NULL, mode_id, desc, 0);
+            _install_wrapper(server, c, str_array, func, mode_id, desc_array, idx+1);
         }
     }
     return CLI_OK;
 }
 
-int cli_server_install_cmd(struct cli_server* server, int node_id, struct cli_cmd_cfg* cfg)
+int cli_server_install_cmd(struct cli_server* server, int mode_id, struct cli_cmd_cfg* cfg)
 {
     CHECK_IF(server == NULL, return CLI_FAIL, "server is null");
     CHECK_IF(server->fd <= 0, return CLI_FAIL, "server fd = %d invalid", server->fd);
@@ -1760,7 +1783,7 @@ int cli_server_install_cmd(struct cli_server* server, int node_id, struct cli_cm
     }
 
     // 開始 install cmd
-    _install_wrapper(server, NULL, str_array, cfg->func, node_id, desc_array, 0);
+    _install_wrapper(server, NULL, str_array, cfg->func, mode_id, desc_array, 0);
 
     array_release(desc_array);
     array_release(str_array);
@@ -1768,31 +1791,31 @@ int cli_server_install_cmd(struct cli_server* server, int node_id, struct cli_cm
     return CLI_OK;
 }
 
-int cli_server_default_node(struct cli_server* server, int id)
+int cli_server_default_mode(struct cli_server* server, int id)
 {
     CHECK_IF(server == NULL, return CLI_FAIL, "server is null");
     CHECK_IF(server->fd <= 0, return CLI_FAIL, "server fd = %d invalid", server->fd);
     CHECK_IF(server->is_init != 1, return CLI_FAIL, "server is not init yet");
 
-    struct cli_node* node = _get_node(server->nodes, id);
-    CHECK_IF(node != NULL, return CLI_FAIL, "node with id = %d has already exists", id);
+    struct cli_mode* mode = _get_mode(server->modes, id);
+    CHECK_IF(mode != NULL, return CLI_FAIL, "mode with id = %d has already exists", id);
 
-    server->default_node = node;
+    server->default_mode = mode;
     return CLI_OK;
 }
 
-int cli_change_node(struct cli* cli, int node_id)
+int cli_change_mode(struct cli* cli, int mode_id)
 {
     CHECK_IF(cli == NULL, return CLI_FAIL, "cli is null");
     CHECK_IF(cli->is_init != 1, return CLI_FAIL, "cli is not init yet");
     CHECK_IF(cli->fd <= 0, return CLI_FAIL, "cli fd = %d invalid", cli->fd);
 
-    struct cli_node* node = _get_node(cli->nodes, node_id);
-    CHECK_IF(node == NULL, return CLI_FAIL, "find no node with id = %d", node_id);
+    struct cli_mode* mode = _get_mode(cli->modes, mode_id);
+    CHECK_IF(mode == NULL, return CLI_FAIL, "find no mode with id = %d", mode_id);
 
-    cli->node_id = node_id;
+    cli->mode_id = mode_id;
     free(cli->prompt);
-    cli->prompt = strdup(node->prompt);
+    cli->prompt = strdup(mode->prompt);
 
     return CLI_OK;
 }

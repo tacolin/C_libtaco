@@ -45,9 +45,9 @@ DEFUN(_read_file,
 
 enum
 {
-    EXEC_NODE = 1,
-    ENABLE_NODE = 2,
-    CONFIG_NODE = 3,
+    EXEC_MODE = 1,
+    ENABLE_MODE = 2,
+    CONFIG_MODE = 3,
 };
 
 struct data
@@ -64,7 +64,7 @@ DEFUN(_enable,
       "enable",
       "change to enable node")
 {
-    cli_change_node(cli, ENABLE_NODE);
+    cli_change_mode(cli, ENABLE_MODE);
     return CLI_OK;
 }
 
@@ -73,7 +73,7 @@ DEFUN(_config,
       "config terminal",
       "change to configure node")
 {
-    cli_change_node(cli, CONFIG_NODE);
+    cli_change_mode(cli, CONFIG_MODE);
     return CLI_OK;
 }
 
@@ -82,18 +82,18 @@ DEFUN(_exit_node,
       "exit",
       "exit current node")
 {
-    if (cli->node_id == EXEC_NODE)
+    if (cli->mode_id == EXEC_MODE)
     {
         // cli should be uninit / disconnected when return CLI_BREAK
         return CLI_BREAK;
     }
-    else if (cli->node_id == ENABLE_NODE)
+    else if (cli->mode_id == ENABLE_MODE)
     {
-        cli_change_node(cli, EXEC_NODE);
+        cli_change_mode(cli, EXEC_MODE);
     }
-    else if (cli->node_id == CONFIG_NODE)
+    else if (cli->mode_id == CONFIG_MODE)
     {
-        cli_change_node(cli, ENABLE_NODE);
+        cli_change_mode(cli, ENABLE_MODE);
     }
     return CLI_OK;
 }
@@ -237,31 +237,31 @@ static void _cli_setup(struct cli_server* server)
 
     cli_server_regular_func(server, _regular);
 
-    cli_server_install_node(server, EXEC_NODE, "[taco]> ");
-    cli_server_install_cmd(server, EXEC_NODE, &_enable_cmd);
-    cli_server_install_cmd(server, EXEC_NODE, &_write_file_cmd);
-    cli_server_install_cmd(server, EXEC_NODE, &_read_file_cmd);
-    cli_server_install_cmd(server, EXEC_NODE, &_exit_node_cmd);
+    cli_server_install_mode(server, EXEC_MODE, "[taco]> ");
+    cli_server_install_cmd(server, EXEC_MODE, &_enable_cmd);
+    cli_server_install_cmd(server, EXEC_MODE, &_write_file_cmd);
+    cli_server_install_cmd(server, EXEC_MODE, &_read_file_cmd);
+    cli_server_install_cmd(server, EXEC_MODE, &_exit_node_cmd);
 
-    cli_server_install_cmd(server, EXEC_NODE, &_show_info_cmd);
+    cli_server_install_cmd(server, EXEC_MODE, &_show_info_cmd);
 
-    cli_server_install_node(server, ENABLE_NODE, "[taco]# ");
-    cli_server_install_cmd(server, ENABLE_NODE, &_config_cmd);
-    cli_server_install_cmd(server, ENABLE_NODE, &_write_file_cmd);
-    cli_server_install_cmd(server, ENABLE_NODE, &_read_file_cmd);
-    cli_server_install_cmd(server, ENABLE_NODE, &_exit_node_cmd);
+    cli_server_install_mode(server, ENABLE_MODE, "[taco]# ");
+    cli_server_install_cmd(server, ENABLE_MODE, &_config_cmd);
+    cli_server_install_cmd(server, ENABLE_MODE, &_write_file_cmd);
+    cli_server_install_cmd(server, ENABLE_MODE, &_read_file_cmd);
+    cli_server_install_cmd(server, ENABLE_MODE, &_exit_node_cmd);
 
-    cli_server_install_cmd(server, ENABLE_NODE, &_system_enable_disable_cmd);
+    cli_server_install_cmd(server, ENABLE_MODE, &_system_enable_disable_cmd);
 
-    cli_server_install_node(server, CONFIG_NODE, "[taco](config)# ");
-    cli_server_install_cmd(server, CONFIG_NODE, &_write_file_cmd);
-    cli_server_install_cmd(server, CONFIG_NODE, &_read_file_cmd);
-    cli_server_install_cmd(server, CONFIG_NODE, &_exit_node_cmd);
+    cli_server_install_mode(server, CONFIG_MODE, "[taco](config)# ");
+    cli_server_install_cmd(server, CONFIG_MODE, &_write_file_cmd);
+    cli_server_install_cmd(server, CONFIG_MODE, &_read_file_cmd);
+    cli_server_install_cmd(server, CONFIG_MODE, &_exit_node_cmd);
 
-    cli_server_install_cmd(server, CONFIG_NODE, &_set_dst_port_cmd);
-    cli_server_install_cmd(server, CONFIG_NODE, &_set_dst_ip_cmd);
-    cli_server_install_cmd(server, CONFIG_NODE, &_set_host_name_cmd);
-    cli_server_install_cmd(server, CONFIG_NODE, &_set_total_cmd);
+    cli_server_install_cmd(server, CONFIG_MODE, &_set_dst_port_cmd);
+    cli_server_install_cmd(server, CONFIG_MODE, &_set_dst_ip_cmd);
+    cli_server_install_cmd(server, CONFIG_MODE, &_set_host_name_cmd);
+    cli_server_install_cmd(server, CONFIG_MODE, &_set_total_cmd);
 
     return;
 }
