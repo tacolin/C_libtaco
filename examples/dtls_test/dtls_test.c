@@ -1,10 +1,13 @@
-#include "basic.h"
 #include "dtls.h"
-#include "list.h"
 
 #include <signal.h>
 #include <string.h>
 #include <sys/select.h>
+
+#define MAX_CONN_NUM (10)
+
+#define dprint(a, b...) fprintf(stdout, "%s(): "a"\n", __func__, ##b)
+#define derror(a, b...) fprintf(stderr, "[ERROR] %s(): "a"\n", __func__, ##b)
 
 static int _running = 1;
 static struct dtls_server _server = {};
@@ -14,15 +17,6 @@ static void _sigIntHandler(int sig_num)
     _running = 0;
     _server.accept_run = 0;
     dprint("stop main()");
-}
-
-static void _destroyDtls(void* arg)
-{
-    CHECK_IF(arg == NULL, return, "arg is null");
-    struct dtls* dtls = (struct dtls*)arg;
-    dtls_client_uninit(dtls);
-    free(dtls);
-    return;
 }
 
 static void _runDtlsClient(char* remote_ip, int remote_port, int local_port)
@@ -69,14 +63,11 @@ static void _runDtlsServer(int local_port)
     int  recvlen;
     int  sendlen;
 
+    struct dtls    dtls[MAX_CONN_NUM] = {0};
     struct timeval timeout = {};
     int            sel_ret;
     fd_set         readset;
-    struct list    dtls_list;
-    struct dtls*   dtls    = NULL;
-    struct list_node* node;
-
-    list_init(&dtls_list, _destroyDtls);
+    int i;
 
     while (_running)
     {
@@ -86,9 +77,12 @@ static void _runDtlsServer(int local_port)
         FD_ZERO(&readset);
         FD_SET(_server.fd, &readset);
 
-        LIST_FOREACH(&dtls_list, node, dtls)
+        for (i=0; i<MAX_CONN_NUM; i++)
         {
-            FD_SET(dtls->fd, &readset);
+            if (dtls[i].is_init)
+            {
+                FD_SET(dtls[i].fd, &readset);
+            }
         }
 
         sel_ret = select(FD_SETSIZE, &readset, NULL, NULL, &timeout);
@@ -98,30 +92,26 @@ static void _runDtlsServer(int local_port)
         }
         else if (sel_ret > 0)
         {
-            LIST_FOREACH(&dtls_list, node, dtls)
+            for (i=0; i<MAX_CONN_NUM; i++)
             {
-                if (FD_ISSET(dtls->fd, &readset))
+                if ((dtls[i].is_init) && FD_ISSET(dtls[i].fd, &readset))
                 {
-                    recvlen = dtls_recv(dtls, buffer, 256);
+                    recvlen = dtls_recv(&dtls[i], buffer, 256);
                     if (recvlen <= 0)
                     {
                         derror("recvlen = %d", recvlen);
-                        list_remove(&dtls_list, dtls);
-                        dtls_client_uninit(dtls);
-                        free(dtls);
+                        dtls_client_uninit(&dtls[i]);
                         break;
                     }
 
                     dprint("rx (%s) from ip(%s) port(%d)", buffer,
-                        dtls->remote.ipv4, dtls->remote.port);
+                        dtls[i].remote.ipv4, dtls[i].remote.port);
 
-                    sendlen = dtls_send(dtls, buffer, recvlen);
+                    sendlen = dtls_send(&dtls[i], buffer, recvlen);
                     if (sendlen <= 0)
                     {
                         derror("send echo back len = %d", sendlen);
-                        list_remove(&dtls_list, dtls);
-                        dtls_client_uninit(dtls);
-                        free(dtls);
+                        dtls_client_uninit(&dtls[i]);
                         break;
                     }
                 }
@@ -129,9 +119,14 @@ static void _runDtlsServer(int local_port)
 
             if (FD_ISSET(_server.fd, &readset))
             {
-                dtls = calloc(sizeof(struct dtls), 1);
-                dtls_server_accept(&_server, dtls);
-                list_append(&dtls_list, dtls);
+                for (i=0; i<MAX_CONN_NUM; i++)
+                {
+                    if (dtls[i].is_init == 0)
+                    {
+                        int chk = dtls_server_accept(&_server, &dtls[i]);
+                        break;
+                    }
+                }
             }
         }
         else
@@ -141,7 +136,11 @@ static void _runDtlsServer(int local_port)
         }
     }
 
-    list_clean(&dtls_list);
+    for (i=0; i<MAX_CONN_NUM; i++)
+    {
+        if (dtls[i].is_init) dtls_client_uninit(&dtls[i]);
+    }
+
     dtls_server_uninit(&_server);
     return;
 }
