@@ -78,7 +78,7 @@ int main(int argc, char const *argv[])
         int recvlen;
         struct udp_addr remote;
 
-        snprintf(remote.ip, INET_ADDRSTRLEN, "%s", argv[1]);
+        snprintf(remote.ip, INET6_ADDRSTRLEN, "%s", argv[1]);
         remote.port = remote_port;
 
         for (i=0 ; i<100; i++)

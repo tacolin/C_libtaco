@@ -1,4 +1,7 @@
 #include <stdio.h>
+#include <assert.h>
+#include <string.h>
+#include <errno.h>
 
 #include "udp.h"
 
@@ -12,40 +15,63 @@
     }\
 }
 
-int udp_to_sockaddr(struct udp_addr udp_addr, struct sockaddr_in* sock_addr)
+int udp_to_sockaddr(struct udp_addr udp_addr, union sock_addr* sock_addr)
 {
-    CHECK_IF(sock_addr == NULL, return UDP_FAIL, "sock_addr is null");
+    assert(sock_addr != NULL);
 
-    int chk = inet_pton(AF_INET, udp_addr.ip, &sock_addr->sin_addr);
-    CHECK_IF(chk != 1, return UDP_FAIL, "inet_pton failed");
-
-    sock_addr->sin_family = AF_INET;
-    sock_addr->sin_port   = htons(udp_addr.port);
+    if (1 == inet_pton(AF_INET, udp_addr.ip, &sock_addr->s4.sin_addr))
+    {
+        sock_addr->ss.ss_family = AF_INET;
+        sock_addr->s4.sin_port = htons(udp_addr.port);
+    }
+    else if (1 == inet_pton(AF_INET6, udp_addr.ip, &sock_addr->s6.sin6_addr))
+    {
+        sock_addr->ss.ss_family = AF_INET6;
+        sock_addr->s6.sin6_port = htons(udp_addr.port);
+    }
+    else
+    {
+        derror("inet_pton v4 and v6 failed, ip = %s", udp_addr.ip);
+        return UDP_FAIL;
+    }
     return UDP_OK;
 }
 
-int udp_to_udpaddr(struct sockaddr_in sock_addr, struct udp_addr* udp_addr)
+int udp_to_udpaddr(union sock_addr sock_addr, struct udp_addr* udp_addr)
 {
-    CHECK_IF(udp_addr == NULL, return UDP_FAIL, "udp_addr is null");
+    assert(udp_addr != NULL);
 
-    inet_ntop(AF_INET, &sock_addr.sin_addr, udp_addr->ip, INET_ADDRSTRLEN);
-    udp_addr->port = ntohs(sock_addr.sin_port);
+    if (sock_addr.ss.ss_family == AF_INET)
+    {
+        inet_ntop(AF_INET, &sock_addr.s4.sin_addr, udp_addr->ip, INET_ADDRSTRLEN);
+        udp_addr->port = ntohs(sock_addr.s4.sin_port);
+    }
+    else if (sock_addr.ss.ss_family == AF_INET6)
+    {
+        inet_ntop(AF_INET6, &sock_addr.s6.sin6_addr, udp_addr->ip, INET6_ADDRSTRLEN);
+        udp_addr->port = ntohs(sock_addr.s6.sin6_port);
+    }
+    else
+    {
+        derror("invalid sin_family = %d", sock_addr.ss.ss_family);
+        return UDP_FAIL;
+    }
     return UDP_OK;
 }
 
-int udp_init(struct udp* udp, char* local_ip, int local_port)
+static int _init_udpv4(struct udp* udp, char* local_ip, int local_port)
 {
-    CHECK_IF(udp == NULL, return UDP_FAIL, "udp is null");
+    assert(udp != NULL);
 
     udp->local_port = local_port;
     udp->fd = socket(AF_INET, SOCK_DGRAM, 0);
-    CHECK_IF(udp->fd < 0, return UDP_FAIL, "socket failed");
+    CHECK_IF(udp->fd < 0, return UDP_FAIL, "socket failed. %s", strerror(errno));
 
     int chk;
     const int on = 1;
 
     chk = setsockopt(udp->fd, SOL_SOCKET, SO_BROADCAST, (void*)&on, sizeof(on));
-    CHECK_IF(chk < 0, goto _ERROR, "setsockopt broadcast failed");
+    CHECK_IF(chk < 0, goto _ERROR, "setsockopt broadcast failed. %s", strerror(errno));
 
     if (udp->local_port != UDP_PORT_ANY)
     {
@@ -54,7 +80,7 @@ int udp_init(struct udp* udp, char* local_ip, int local_port)
         if (local_ip)
         {
             chk = inet_pton(AF_INET, local_ip, &me.sin_addr);
-            CHECK_IF(chk != 1, goto _ERROR, "inet_pton failed");
+            CHECK_IF(chk != 1, goto _ERROR, "inet_pton failed. %s", strerror(errno));
         }
         else
         {
@@ -63,12 +89,13 @@ int udp_init(struct udp* udp, char* local_ip, int local_port)
         me.sin_port = htons(local_port);
 
         chk = setsockopt(udp->fd, SOL_SOCKET, SO_REUSEADDR, (void*)&on, sizeof(on));
-        CHECK_IF(chk < 0, goto _ERROR, "setsockopt reuse failed");
+        CHECK_IF(chk < 0, goto _ERROR, "setsockopt reuse failed. %s", strerror(errno));
 
         chk = bind(udp->fd, (struct sockaddr*)&me, sizeof(me));
-        CHECK_IF(chk < 0, goto _ERROR, "bind failed");
+        CHECK_IF(chk < 0, goto _ERROR, "bind failed. %s", strerror(errno));
     }
 
+    udp->type = UDPv4;
     udp->is_init = 1;
     return UDP_OK;
 
@@ -81,15 +108,83 @@ _ERROR:
     return UDP_FAIL;
 }
 
+static int _init_udpv6(struct udp* udp, char* local_ip, int local_port)
+{
+    assert(udp != NULL);
+
+    udp->local_port = local_port;
+    udp->fd = socket(AF_INET6, SOCK_DGRAM, 0);
+    CHECK_IF(udp->fd < 0, return UDP_FAIL, "socket failed. %s", strerror(errno));
+
+    int chk;
+    const int on = 1;
+
+    chk = setsockopt(udp->fd, SOL_SOCKET, SO_BROADCAST, (void*)&on, sizeof(on));
+    CHECK_IF(chk < 0, goto _ERROR, "setsockopt broadcast failed. %s", strerror(errno));
+
+    if (udp->local_port != UDP_PORT_ANY)
+    {
+        struct sockaddr_in6 me = {};
+        me.sin6_family = AF_INET6;
+        if (local_ip)
+        {
+            chk = inet_pton(AF_INET6, local_ip, &me.sin6_addr);
+            CHECK_IF(chk != 1, goto _ERROR, "inet_pton failed. %s", strerror(errno));
+        }
+        else
+        {
+            me.sin6_addr = in6addr_any;
+        }
+        me.sin6_port = htons(local_port);
+
+        chk = setsockopt(udp->fd, SOL_SOCKET, SO_REUSEADDR, (void*)&on, sizeof(on));
+        CHECK_IF(chk < 0, goto _ERROR, "setsockopt reuse failed. %s", strerror(errno));
+
+        chk = bind(udp->fd, (struct sockaddr*)&me, sizeof(me));
+        CHECK_IF(chk < 0, goto _ERROR, "bind failed. %s", strerror(errno));
+    }
+
+    udp->type = UDPv6;
+    udp->is_init = 1;
+    return UDP_OK;
+
+_ERROR:
+    if (udp->fd > 0)
+    {
+        close(udp->fd);
+        udp->fd = -1;
+    }
+    return UDP_FAIL;
+}
+
+int udp_init(struct udp* udp, char* local_ip, int local_port)
+{
+    assert(udp != NULL);
+
+    if (local_ip)
+    {
+        struct sockaddr_in me = {};
+        if (1 == inet_pton(AF_INET, local_ip, &me.sin_addr))
+        {
+            return _init_udpv4(udp, local_ip, local_port);
+        }
+        else
+        {
+            return _init_udpv6(udp, local_ip, local_port);
+        }
+    }
+    return _init_udpv6(udp, local_ip, local_port);
+}
+
 int udp_send(struct udp* udp, struct udp_addr remote, void* data, int data_len)
 {
-    CHECK_IF(udp == NULL, return UDP_FAIL, "udp is null");
-    CHECK_IF(udp->fd <= 0, return UDP_FAIL, "udp fd <= 0");
-    CHECK_IF(udp->is_init != 1, return UDP_FAIL, "udp is not initialized yet");
-    CHECK_IF(data == NULL, return UDP_FAIL, "data is null");
-    CHECK_IF(data_len <= 0, return UDP_FAIL, "data_len is %d", data_len);
+    assert(udp != NULL);
+    assert(udp->fd > 0);
+    assert(udp->is_init == 1);
+    assert(data != NULL);
+    assert(data_len > 0);
 
-    struct sockaddr_in remote_addr = {};
+    union sock_addr remote_addr = {};
     int addrlen = sizeof(remote_addr);
 
     int chk = udp_to_sockaddr(remote, &remote_addr);
@@ -100,13 +195,13 @@ int udp_send(struct udp* udp, struct udp_addr remote, void* data, int data_len)
 
 int udp_recv(struct udp* udp, void* buffer, int buffer_size, struct udp_addr* remote)
 {
-    CHECK_IF(udp == NULL, return UDP_FAIL, "udp is null");
-    CHECK_IF(udp->fd <= 0, return UDP_FAIL, "udp fd <= 0");
-    CHECK_IF(udp->is_init != 1, return UDP_FAIL, "udp is not initialized yet");
-    CHECK_IF(buffer == NULL, return UDP_FAIL, "buffer is null");
-    CHECK_IF(buffer_size <= 0, return UDP_FAIL, "buffer_size is %d", buffer_size);
+    assert(udp != NULL);
+    assert(udp->fd > 0);
+    assert(udp->is_init == 1);
+    assert(buffer != NULL);
+    assert(buffer_size > 0);
 
-    struct sockaddr_in remote_addr = {};
+    union sock_addr remote_addr = {};
     int addrlen = sizeof(remote_addr);
 
     int recvlen = recvfrom(udp->fd, buffer, buffer_size, 0, (struct sockaddr*)&remote_addr, &addrlen);
@@ -118,9 +213,9 @@ int udp_recv(struct udp* udp, void* buffer, int buffer_size, struct udp_addr* re
 
 int udp_uninit(struct udp* udp)
 {
-    CHECK_IF(udp == NULL, return UDP_FAIL, "udp is null");
-    CHECK_IF(udp->fd <= 0, return UDP_FAIL, "udp fd <= 0");
-    CHECK_IF(udp->is_init != 1, return UDP_FAIL, "udp is not initialized yet");
+    assert(udp != NULL);
+    assert(udp->fd > 0);
+    assert(udp->is_init == 1);
 
     close(udp->fd);
     udp->fd = -1;
