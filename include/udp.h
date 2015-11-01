@@ -11,7 +11,7 @@
 
 struct udp_addr
 {
-    char ipv4[INET_ADDRSTRLEN];
+    char ip[INET_ADDRSTRLEN];
     int  port;
 };
 

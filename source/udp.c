@@ -16,7 +16,7 @@ int udp_to_sockaddr(struct udp_addr udp_addr, struct sockaddr_in* sock_addr)
 {
     CHECK_IF(sock_addr == NULL, return UDP_FAIL, "sock_addr is null");
 
-    int chk = inet_pton(AF_INET, udp_addr.ipv4, &sock_addr->sin_addr);
+    int chk = inet_pton(AF_INET, udp_addr.ip, &sock_addr->sin_addr);
     CHECK_IF(chk != 1, return UDP_FAIL, "inet_pton failed");
 
     sock_addr->sin_family = AF_INET;
@@ -28,7 +28,7 @@ int udp_to_udpaddr(struct sockaddr_in sock_addr, struct udp_addr* udp_addr)
 {
     CHECK_IF(udp_addr == NULL, return UDP_FAIL, "udp_addr is null");
 
-    inet_ntop(AF_INET, &sock_addr.sin_addr, udp_addr->ipv4, INET_ADDRSTRLEN);
+    inet_ntop(AF_INET, &sock_addr.sin_addr, udp_addr->ip, INET_ADDRSTRLEN);
     udp_addr->port = ntohs(sock_addr.sin_port);
     return UDP_OK;
 }

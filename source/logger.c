@@ -57,7 +57,7 @@ int logger_set_udp(struct logger* logger, char* dstip, int dstport)
     }
 
     udp_init(&logger->udp, NULL, UDP_PORT_ANY);
-    snprintf(logger->remote.ipv4, INET_ADDRSTRLEN, "%s", dstip);
+    snprintf(logger->remote.ip, INET_ADDRSTRLEN, "%s", dstip);
     logger->remote.port = dstport;
     logger->flag |= LOG_FLAG_UDP;
     return LOG_OK;
@@ -100,7 +100,7 @@ int logger_unset_stdout(struct logger* logger)
 
 int logger_set_stdout(struct logger* logger)
 {
-    CHECK_IF(logger == NULL, return LOG_FAIL, "logger is null");    
+    CHECK_IF(logger == NULL, return LOG_FAIL, "logger is null");
     logger->flag |= LOG_FLAG_STDOUT;
     return LOG_OK;
 }

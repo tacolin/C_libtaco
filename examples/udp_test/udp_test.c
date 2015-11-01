@@ -46,7 +46,7 @@ int main(int argc, char const *argv[])
             }
 
             dprint("rx (%s) from ip(%s) port(%d)",
-                    buffer, remote.ipv4, remote.port);
+                    buffer, remote.ip, remote.port);
 
             sendlen = udp_send(&server, remote, buffer, recvlen);
             if (sendlen <= 0)
@@ -78,7 +78,7 @@ int main(int argc, char const *argv[])
         int recvlen;
         struct udp_addr remote;
 
-        snprintf(remote.ipv4, INET_ADDRSTRLEN, "%s", argv[1]);
+        snprintf(remote.ip, INET_ADDRSTRLEN, "%s", argv[1]);
         remote.port = remote_port;
 
         for (i=0 ; i<100; i++)
