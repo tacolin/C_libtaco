@@ -30,6 +30,7 @@ struct udp
     int type;
 
     int local_port;
+    int lock;
     int fd;
     int is_init;
 };

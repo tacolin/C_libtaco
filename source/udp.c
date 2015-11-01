@@ -5,6 +5,12 @@
 
 #include "udp.h"
 
+#define atom_spinlock(ptr) while (__sync_lock_test_and_set(ptr,1)) {}
+#define atom_spinunlock(ptr) __sync_lock_release(ptr)
+
+#define LOCK(udp) atom_spinlock(&udp->lock)
+#define UNLOCK(udp) atom_spinunlock(&udp->lock)
+
 #define derror(a, b...) fprintf(stderr, "[ERROR] %s(): "a"\n", __func__, ##b)
 #define CHECK_IF(assertion, error_action, ...) \
 {\
@@ -96,6 +102,7 @@ static int _init_udpv4(struct udp* udp, char* local_ip, int local_port)
     }
 
     udp->type = UDPv4;
+    udp->lock = 0;
     udp->is_init = 1;
     return UDP_OK;
 
@@ -145,6 +152,7 @@ static int _init_udpv6(struct udp* udp, char* local_ip, int local_port)
     }
 
     udp->type = UDPv6;
+    udp->lock = 0;
     udp->is_init = 1;
     return UDP_OK;
 
@@ -190,7 +198,10 @@ int udp_send(struct udp* udp, struct udp_addr remote, void* data, int data_len)
     int chk = udp_to_sockaddr(remote, &remote_addr);
     CHECK_IF(chk != UDP_OK, return -1, "udp_to_sockaddr failed");
 
-    return sendto(udp->fd, data, data_len, 0, (const struct sockaddr*)&remote_addr, addrlen);
+    LOCK(udp);
+    int sendlen = sendto(udp->fd, data, data_len, 0, (const struct sockaddr*)&remote_addr, addrlen);
+    UNLOCK(udp);
+    return sendlen;
 }
 
 int udp_recv(struct udp* udp, void* buffer, int buffer_size, struct udp_addr* remote)
