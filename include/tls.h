@@ -20,6 +20,9 @@
 #define TLS_OK (0)
 #define TLS_FAIL (-1)
 
+// if you send more the 16384 bytes in tls_send(), your packet will be fragmenet by ip layer.
+#define TLS_MAGIC_NUMBER (16384)
+
 struct tls_addr
 {
     char ipv4[INET_ADDRSTRLEN];
