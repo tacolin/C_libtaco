@@ -7,6 +7,8 @@ set(CMAKE_INSTALL_PREFIX "${ROOT_DIR}/output")
 set(APP_INSTALL_DIR "./")
 set(LIB_INSTALL_DIR "lib")
 
+find_package(OpenSSL REQUIRED)
+
 set(CMAKE_INSTALL_RPATH ${LIB_INSTALL_DIR})
 
 include( "cmake/default.cmake" )

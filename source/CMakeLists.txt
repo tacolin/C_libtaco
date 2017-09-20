@@ -8,7 +8,6 @@ add_definitions(-g)
 add_definitions(-Werror)
 add_definitions(-fms-extensions)
 add_definitions(-D_GNU_SOURCE)
-# add_definitions(-pthread)
 set(CMAKE_C_FLAGS ${CMAKE_C_FLAGS} "-pthread")
 
 aux_source_directory( ${CMAKE_CURRENT_LIST_DIR} _src_files )
