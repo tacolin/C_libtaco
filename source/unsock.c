@@ -70,7 +70,7 @@ int untcp_server_accept(struct untcp_server* server, struct untcp* untcp)
     CHECK_IF(untcp == NULL, return UN_FAIL, "untcp is null");
 
     struct sockaddr_un remote = {};
-    int addrlen = sizeof(remote);
+    socklen_t addrlen = sizeof(remote);
 
     untcp->fd = accept(server->fd, (struct sockaddr*)&remote, &addrlen);
     CHECK_IF(untcp->fd < 0, return UN_FAIL, "accept failed");
